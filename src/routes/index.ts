@@ -206,6 +206,10 @@ router.put("/cart/:language/:orderID", [
   orderChangeConfirmation,
 ])
 
+router.get("/", (_req, res) => {
+  res.send("Nothing to see here")
+})
+
 router.post(
   "/send-email-form",
   [
