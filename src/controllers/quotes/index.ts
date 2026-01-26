@@ -1,9 +1,8 @@
 import { request as httpRequest, RequestOptions } from 'https'
 import { Request, Response } from 'express'
-import { EError, ELanguages } from '../../types'
+import { ELanguages } from '../../types'
 
-const API_URL = 'https://api.api-ninjas.com/v1/quotes'
-const API_KEY = process.env.API_NINJAS_API_KEY
+const API_KEY = process.env.RAPIDAPI_API_KEY
 
 export enum EErrorFetchingQuotes {
   en = 'Error fetching quotes',
@@ -26,17 +25,20 @@ export enum ESuccessfullyFetchedQuote {
 
 export const getQuotes = async (req: Request, res: Response) => {
   const language = (req.params.language as ELanguages) || 'en'
-  const category = req.params.category
-  const url = new URL(API_URL)
-  url.searchParams.append('category', category)
+  const path = `/quotes/random/?language_code=${language}`
 
   const options: RequestOptions = {
+    method: 'GET',
+    hostname: 'quotes15.p.rapidapi.com',
+    port: 443, // HTTPS default port
+    path,
     headers: {
-      'X-Api-Key': API_KEY,
+      'x-rapidapi-key': API_KEY as string,
+      'x-rapidapi-host': 'quotes15.p.rapidapi.com',
     },
   }
 
-  const request = httpRequest(url, options, (response) => {
+  const request = httpRequest(options, (response) => {
     let data = ''
 
     response.on('data', (chunk) => {
@@ -45,13 +47,23 @@ export const getQuotes = async (req: Request, res: Response) => {
 
     response.on('end', () => {
       if (response.statusCode === 200) {
-        const quotes = JSON.parse(data)
-        res.json({
-          success: true,
-          message: ESuccessfullyFetchedQuote[language],
-          quote: quotes,
-        })
+        try {
+          const quote = JSON.parse(data)
+          res.json({
+            success: true,
+            message: ESuccessfullyFetchedQuote[language],
+            quote,
+          })
+        } catch (error) {
+          console.error(`${EErrorFetchingQuotes[language]}: Invalid JSON response`, error)
+          res.status(500).json({
+            success: false,
+            message: `${EErrorFetchingQuotes[language]}: Invalid JSON response`,
+            quote: null,
+          })
+        }
       } else {
+        console.log(`${EErrorFetchingQuotes[language]}: `, data)
         res.status(response.statusCode || 500).json({
           success: false,
           message: `${EErrorFetchingQuotes[language]}: ${response.statusMessage}`,
@@ -65,7 +77,7 @@ export const getQuotes = async (req: Request, res: Response) => {
     console.error(`${EErrorFetchingQuotes[language]}: `, error)
     res.status(500).json({
       success: false,
-      message: `${EError[language]}: ${error.message}`,
+      message: `${EErrorFetchingQuotes[language]}: ${error.message}`,
       quote: null,
       error,
     })
