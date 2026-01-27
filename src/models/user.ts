@@ -1,5 +1,5 @@
-import { IUser } from '../types'
-import { model, Schema } from 'mongoose'
+import { IUser } from "../types"
+import { model, Schema } from "mongoose"
 
 const userSchema: Schema = new Schema(
   {
@@ -49,6 +49,12 @@ const userSchema: Schema = new Schema(
       type: String,
       required: false,
     },
+    tokenVersion: {
+      type: Number,
+      required: true,
+      default: 0,
+      min: 0,
+    },
     blacklistedJokes: [
       {
         jokeId: {
@@ -69,4 +75,4 @@ const userSchema: Schema = new Schema(
   { timestamps: true }
 )
 
-export const User = model<IUser>('User', userSchema)
+export const User = model<IUser>("User", userSchema)

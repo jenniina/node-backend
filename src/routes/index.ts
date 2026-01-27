@@ -48,6 +48,8 @@ import {
   confirmEmail,
   addToBlacklistedJokes,
   removeJokeFromBlacklisted,
+  revokeUserSessions,
+  authPing,
 } from "../controllers/users"
 import {
   getJokes,
@@ -109,6 +111,8 @@ const validateNewOrderEmail = [
 
 router.post("/login", loginUser)
 
+router.get("/auth/ping", [authenticateUser], authPing)
+
 router.post("/users/forgot", forgotPassword)
 router.get("/users/reset/:token", resetPassword)
 router.post("/users/reset/:token", resetPasswordToken)
@@ -127,6 +131,11 @@ router.get("/users/logout", logoutUser)
 //router.get('/users/verify/:token', [verifyTokenMiddleware, verifyEmailToken])
 router.post("/users/:id", generateToken)
 router.get("/users/username/:username", findUserByUsername)
+router.post(
+  "/users/:id/revoke-sessions",
+  [authenticateUser],
+  revokeUserSessions
+)
 // router.post('/users/:id/delete', deleteAllJokesByUserId)
 router.put("/users/:id/:jokeId/:language", addToBlacklistedJokes)
 router.delete("/users/:id/:joke_id/:language", removeJokeFromBlacklisted)
