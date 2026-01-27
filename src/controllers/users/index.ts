@@ -158,6 +158,24 @@ enum EInvalidLoginCredentials {
   cs = "Neplatné přihlašovací údaje",
   fi = "Virheelliset kirjautumistiedot",
 }
+enum EInvalidCredentials {
+  en = "Invalid credentials",
+  es = "Credenciales inválidas",
+  fr = "Identifiants invalides",
+  de = "Ungültige Anmeldeinformationen",
+  pt = "Credenciais inválidas",
+  cs = "Neplatné přihlašovací údaje",
+  fi = "Virheelliset tunnistetiedot",
+}
+enum EForbidden {
+  en = "Forbidden",
+  es = "Prohibido",
+  fr = "Interdit",
+  de = "Verboten",
+  pt = "Proibido",
+  cs = "Zakázáno",
+  fi = "Kielletty",
+}
 enum EInvalidOrMissingToken {
   en = "Invalid or missing request",
   es = "Solicitud inválida o faltante",
@@ -267,14 +285,57 @@ enum ESuccessfullyLoggedIn {
   cs = "Úspěšně přihlášen",
   fi = "Kirjauduttu onnistuneesti",
 }
+enum ESessionRevoked {
+  en = "Session revoked",
+  es = "Sesión revocada",
+  fr = "Session révoquée",
+  de = "Sitzung widerrufen",
+  pt = "Sessão revogada",
+  cs = "Relace zrušena",
+  fi = "Istunto peruutettu",
+}
+
 const InvalidOrExpiredToken = "Invalid or expired token"
+
+const generateSessionToken = async (
+  userId: string | undefined,
+  tokenVersion: number | undefined
+): Promise<string | undefined> => {
+  if (!userId) return undefined
+
+  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const options = { expiresIn: "2d" }
+  const safeTokenVersion = tokenVersion ?? 0
+
+  try {
+    const token = (await new Promise<string | undefined>((resolve, reject) => {
+      jwt.sign(
+        { userId, tokenVersion: safeTokenVersion },
+        secret,
+        options,
+        (err, token) => {
+          if (err) {
+            console.error(err)
+            reject(undefined)
+          } else {
+            resolve(token)
+          }
+        }
+      )
+    })) as IToken["token"]
+    return token
+  } catch (error) {
+    console.error("Error generating session token:", error)
+    return undefined
+  }
+}
 
 const generateToken = async (
   id: string | undefined
 ): Promise<string | undefined> => {
   if (!id) return undefined
 
-  const secret: Secret = process.env.JWT_SECRET || "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
   const options = { expiresIn: "1d" }
   try {
     const token = (await new Promise<string | undefined>((resolve, reject) => {
@@ -295,7 +356,7 @@ const generateToken = async (
 }
 
 const verifyToken = (token: string) => {
-  const secret: Secret = process.env.JWT_SECRET || "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
 
   return jwt.verify(token, secret) as ITokenPayload
 }
@@ -312,7 +373,7 @@ const generateUsernameChangeResetToken = async (payload: {
   oldUsername: string
   newUsername: string
 }): Promise<string | undefined> => {
-  const secret: Secret = process.env.JWT_SECRET || "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
   const options = { expiresIn: "2d" }
 
   try {
@@ -347,7 +408,7 @@ const generateUsernameChangeResetToken = async (payload: {
 const verifyUsernameChangeResetToken = (
   token: string
 ): UsernameChangeResetTokenPayload => {
-  const secret: Secret = process.env.JWT_SECRET || "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
   const decoded = jwt.verify(token, secret) as UsernameChangeResetTokenPayload
   if (!decoded || decoded.purpose !== "username_change_undo") {
     throw new Error("Invalid token purpose")
@@ -364,16 +425,22 @@ const authenticateUser = async (
     const token = req.headers.authorization?.split(" ")[1]
     if (!token)
       throw new Error(
-        ENoTokenProvided[(req.body.language as ELanguage) || "en"]
+        ENoTokenProvided[(req.body.language as ELanguage) ?? "en"]
       )
 
     const decoded = verifyToken(token)
 
     if (!decoded) throw new Error("Token not decoded")
     const user: IUser | null = await User.findById(decoded?.userId)
-    const language = user?.language || "en"
+    const language = user?.language ?? "en"
 
     if (!user) throw new Error(EAuthenticationFailed[language as ELanguage])
+
+    const decodedTokenVersion = decoded.tokenVersion ?? 0
+    const currentTokenVersion = user.tokenVersion ?? 0
+    if (decodedTokenVersion !== currentTokenVersion) {
+      throw new Error("Token revoked")
+    }
 
     // Attach user information to the request object
     req.body.user = user
@@ -381,7 +448,13 @@ const authenticateUser = async (
   } catch (error) {
     //throw new Error((error as Error).message)
     console.error("Error:", error)
-    res.status(401).json({ success: false, message: "Authentication failed" })
+    res
+      .status(401)
+      .json({
+        success: false,
+        message:
+          EAuthenticationFailed[(req.body.language as ELanguage) ?? "en"],
+      })
   }
 }
 
@@ -393,21 +466,27 @@ const verifyTokenMiddleware = async (
     const token = req.headers.authorization?.split(" ")[1] as IToken["token"]
     if (!token)
       throw new Error(
-        ENoTokenProvided[(req.body.language as ELanguage) || "en"]
+        ENoTokenProvided[(req.body.language as ELanguage) ?? "en"]
       )
     const decoded = verifyToken(token)
     const user: IUser | null = await User.findById(decoded?.userId)
     if (!user) throw new Error("User not found")
+
+    const decodedTokenVersion = decoded.tokenVersion ?? 0
+    const currentTokenVersion = user.tokenVersion ?? 0
+    if (decodedTokenVersion !== currentTokenVersion) {
+      throw new Error("Token revoked")
+    }
     res.status(200).json({
       message:
-        ETokenVerified[(req.body.language as ELanguage) || "en"] ||
+        ETokenVerified[(req.body.language as ELanguage) ?? "en"] ??
         "Token verified",
     })
   } catch (error) {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -429,7 +508,7 @@ const checkIfAdmin = async (
     // User is not an admin, deny access
     res.status(403).json({
       message:
-        EAccessDeniedAdminPrivilegeRequired[language as ELanguage] ||
+        EAccessDeniedAdminPrivilegeRequired[language as ELanguage] ??
         "Access denied. Admin privilege required.",
     })
   }
@@ -451,7 +530,7 @@ const checkIfManagement = async (
     // User is not an manager, deny access
     res.status(403).json({
       message:
-        EAccessDeniedManagementPrivilegeRequired[language as ELanguage] ||
+        EAccessDeniedManagementPrivilegeRequired[language as ELanguage] ??
         "Access denied. Management privilege required.",
     })
   }
@@ -482,7 +561,7 @@ const getUsers = async (req: Request, res: Response): Promise<void> => {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -495,7 +574,7 @@ const getUser = async (req: Request, res: Response): Promise<void> => {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -520,7 +599,7 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       success: true,
-      message: EUserAdded[newUser.language || "en"],
+      message: EUserAdded[newUser.language ?? "en"],
       user: {
         _id: newUser._id,
         name: newUser.name,
@@ -535,7 +614,7 @@ const addUser = async (req: Request, res: Response): Promise<void> => {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -606,11 +685,11 @@ const updateUsername = async (req: Request, res: Response): Promise<void> => {
 
       // Prepare email details
       const subject =
-        EEmailConfirmation[(user.language as unknown as ELanguage) || "en"]
+        EEmailConfirmation[(user.language as unknown as ELanguage) ?? "en"]
       const message =
-        EConfirmEmail[(user.language as unknown as ELanguage) || "en"]
+        EConfirmEmail[(user.language as unknown as ELanguage) ?? "en"]
       const link = `${process.env.BASE_URI}/api/users/${username}/confirm-email/${token}?lang=${user.language}`
-      const language = (user.language as unknown as ELanguage) || "en"
+      const language = (user.language as unknown as ELanguage) ?? "en"
       // Send confirmation email to new address
       await sendMail(subject, message, username, link)
 
@@ -618,11 +697,11 @@ const updateUsername = async (req: Request, res: Response): Promise<void> => {
       if (resetToken && oldUsername) {
         const alertSubject =
           EUsernameChangedAlertSubject[
-            (user.language as unknown as ELanguage) || "en"
+            (user.language as unknown as ELanguage) ?? "en"
           ]
         const alertMessage =
           EUsernameChangedAlertMessage[
-            (user.language as unknown as ELanguage) || "en"
+            (user.language as unknown as ELanguage) ?? "en"
           ]
         const resetLink = `${process.env.BASE_URI}/api/users/reset-username/${resetToken}?lang=${user.language}`
         await sendMail(alertSubject, alertMessage, oldUsername, resetLink)
@@ -630,12 +709,13 @@ const updateUsername = async (req: Request, res: Response): Promise<void> => {
 
       res.status(200).json({
         success: true,
-        message: EUpdatePending[user.language || "en"],
+        message:
+          EUpdatePending[(user.language as unknown as ELanguage) ?? "en"],
       })
     } else {
       res.status(404).json({
         success: false,
-        message: "User not found",
+        message: EError[(req.body.language as ELanguage) ?? "en"],
       })
     }
   } catch (error) {
@@ -671,7 +751,7 @@ const resetUsernameChange = async (
   }
 
   const { token } = req.params
-  const language = (req.query.lang as string) || "en"
+  const language = (req.query.lang as string) ?? "en"
 
   try {
     const decoded = verifyUsernameChangeResetToken(token)
@@ -686,6 +766,10 @@ const resetUsernameChange = async (
     user.set("confirmToken", undefined)
     user.verified = true
     user.markModified("verified")
+
+    // Revoke all existing sessions (forces remote logout on all devices).
+    user.tokenVersion = (user.tokenVersion ?? 0) + 1
+    user.markModified("tokenVersion")
 
     // If the username has already been confirmed/changed, revert it.
     if (String(user.username) === String(decoded.newUsername)) {
@@ -735,16 +819,16 @@ const resetUsernameChange = async (
             color: white;
           }
         </style>
-        <title>${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        <title>${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
         <body>
           <div>
-            <h1>${EJenniinaFi[(language as ELanguage) || "en"]}</h1>
-            <h2>${EResetTitle[(language as ELanguage) || "en"]}</h2>
-            <p>${EResetSuccess[(language as ELanguage) || "en"]}</p>
+            <h1>${EJenniinaFi[(language as ELanguage) ?? "en"]}</h1>
+            <h2>${EResetTitle[(language as ELanguage) ?? "en"]}</h2>
+            <p>${EResetSuccess[(language as ELanguage) ?? "en"]}</p>
             <p>
             <a href=${process.env.SITE_URL}/?login=login>${
-              EBackToTheApp[(language as ELanguage) || "en"]
+              EBackToTheApp[(language as ELanguage) ?? "en"]
             }</a>
             </p>
           </div>
@@ -755,6 +839,83 @@ const resetUsernameChange = async (
   } catch (error) {
     console.error(error)
     res.status(400).send(InvalidOrExpiredToken)
+  }
+}
+
+const revokeUserSessions = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  console.log(req.params.id, req.body.user)
+  try {
+    const requester = req.body.user as IUser | undefined
+    if (!requester) {
+      res.status(401).json({
+        success: false,
+        message: EInvalidCredentials["en"],
+      })
+      return
+    }
+
+    const targetUserId = req.params.id
+    const isSelf = String(requester._id) === String(targetUserId)
+    const isAdmin = (requester.role ?? 0) > 2
+
+    if (!isSelf && !isAdmin) {
+      res.status(403).json({
+        success: false,
+        message: EForbidden[(req.body.language as ELanguage) ?? "en"],
+      })
+      return
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      targetUserId,
+      { $inc: { tokenVersion: 1 } },
+      { new: true }
+    )
+
+    if (!updated) {
+      res.status(404).json({
+        success: false,
+        message: EInvalidCredentials[(req.body.language as ELanguage) ?? "en"],
+      })
+      return
+    }
+
+    res.status(200).json({
+      success: true,
+      message: ESessionRevoked[(req.body.language as ELanguage) ?? "en"],
+    })
+  } catch (error) {
+    console.error("Error:", error)
+    res.status(500).json({
+      success: false,
+      message: EError[(req.body.language as ELanguage) ?? "en"],
+    })
+  }
+}
+
+const authPing = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const requester = req.body.user as IUser | undefined
+    if (!requester) {
+      res
+        .status(401)
+        .json({ success: false, message: EAuthenticationFailed.en })
+      return
+    }
+
+    res.status(200).json({
+      success: true,
+      userId: requester._id,
+    })
+  } catch (error) {
+    console.error("Error:", error)
+    res.status(500).json({
+      success: false,
+      message: EError[(req.body.language as ELanguage) ?? "en"],
+    })
   }
 }
 
@@ -788,7 +949,7 @@ const confirmEmail = async (req: Request, res: Response): Promise<void> => {
   }
 
   const { token, username } = req.params
-  const language = req.query.lang || "en"
+  const language = req.query.lang ?? "en"
 
   try {
     // Validate the token
@@ -834,16 +995,16 @@ const confirmEmail = async (req: Request, res: Response): Promise<void> => {
         }
       </style>
       <title>
-      ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+      ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
         <div>
           <h1>
-            ${EInvalidOrMissingToken[language as ELanguage] || InvalidOrExpiredToken}
+            ${EInvalidOrMissingToken[language as ELanguage] ?? InvalidOrExpiredToken}
           </h1>
           <p>${
             ELogInAtTheAppOrRequestANewEmailConfirmToken[
-              (language as ELanguage) || "en"
+              (language as ELanguage) ?? "en"
             ]
           }</p> 
           <p>
@@ -896,16 +1057,16 @@ const confirmEmail = async (req: Request, res: Response): Promise<void> => {
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
         <body>
           <div>
-            <h1>${EJenniinaFi[(language as ELanguage) || "en"]}</h1>
-            <h2>${EEmailConfirmed[(language as ELanguage) || "en"]}</h2>
-            <p>${EEmailHasBeenConfirmed[(language as ELanguage) || "en"]}</p>
+            <h1>${EJenniinaFi[(language as ELanguage) ?? "en"]}</h1>
+            <h2>${EEmailConfirmed[(language as ELanguage) ?? "en"]}</h2>
+            <p>${EEmailHasBeenConfirmed[(language as ELanguage) ?? "en"]}</p>
             <p>
             <a href=${process.env.SITE_URL}/?login=login>${
-              EBackToTheApp[(language as ELanguage) || "en"]
+              EBackToTheApp[(language as ELanguage) ?? "en"]
             }</a>
             </p>
           </div>
@@ -938,7 +1099,7 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
           res.status(400).json({
             success: false,
             message:
-              EThisNameIsNotAvailable[req.body.language as ELanguage] ||
+              EThisNameIsNotAvailable[req.body.language as ELanguage] ??
               "This name is not available",
           })
           return
@@ -960,7 +1121,7 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
           success: true,
           message: `${
             EUserUpdated[
-              (updatedUser?.language as unknown as ELanguage) || "en"
+              (updatedUser?.language as unknown as ELanguage) ?? "en"
             ]
           }!`,
           user: {
@@ -980,7 +1141,7 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
       res.status(200).json({
         success: true,
         message: `${
-          EUserUpdated[(updatedUser?.language as unknown as ELanguage) || "en"]
+          EUserUpdated[(updatedUser?.language as unknown as ELanguage) ?? "en"]
         }!`,
         user: {
           _id: updatedUser._id,
@@ -996,14 +1157,14 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
     } else {
       res.status(404).json({
         success: false,
-        message: EError[(req.body.language as ELanguage) || "en"],
+        message: EError[(req.body.language as ELanguage) ?? "en"],
       })
     }
   } catch (error) {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: `${EError[(req.body.language as ELanguage) || "en"]} ¤`,
+      message: `${EError[(req.body.language as ELanguage) ?? "en"]} ¤`,
       error,
     })
   }
@@ -1060,7 +1221,7 @@ const comparePassword = async (
       } else {
         res.status(401).json({
           success: false,
-          message: `${ECurrentPasswordWrong[(language as ELanguage) || "en"]}`,
+          message: `${ECurrentPasswordWrong[(language as ELanguage) ?? "en"]}`,
         })
       }
     }
@@ -1068,7 +1229,7 @@ const comparePassword = async (
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -1095,18 +1256,16 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
 
   if (!user) {
     res.status(401).json({
-      message:
-        `${EInvalidLoginCredentials[language as ELanguage]}` ||
-        "Invalid login credentials - ",
+      message: `${EInvalidLoginCredentials[(language as ELanguage) ?? "en"]}`,
     })
   } else if (user?.verified) {
     const passwordMatch: boolean = await comparePassword.call(user, password)
     if (passwordMatch) {
-      const token = await generateToken(user._id)
+      const token = await generateSessionToken(user._id, user.tokenVersion)
 
       res.status(200).json({
         success: true,
-        message: ESuccessfullyLoggedIn[user.language || "en"],
+        message: ESuccessfullyLoggedIn[user.language ?? "en"],
         user: {
           _id: user._id,
           name: user.name,
@@ -1121,7 +1280,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
     } else {
       res.status(401).json({
         success: false,
-        message: EInvalidLoginCredentials[user.language || "en"],
+        message: EInvalidLoginCredentials[user.language ?? "en"],
       })
     }
   } else if (!user?.verified && !user?.token) {
@@ -1139,7 +1298,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
       console.error(error)
       res.status(500).json({
         success: false,
-        message: EError[(req.body.language as ELanguage) || "en"],
+        message: EError[(req.body.language as ELanguage) ?? "en"],
       })
     }
   } else if (user?.token && !user?.verified) {
@@ -1171,7 +1330,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
         console.error(error)
         res.status(500).json({
           success: false,
-          message: EError[(req.body.language as ELanguage) || "en"],
+          message: EError[(req.body.language as ELanguage) ?? "en"],
         })
       }
     } else if (!user.verified) {
@@ -1203,7 +1362,7 @@ const loginUser = async (req: Request, res: Response): Promise<void> => {
 
 const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   const { username } = req.body
-  const language = req.body.language || "en"
+  const language = req.body.language ?? "en"
   const user: IUser | null = await User.findOne({ username })
   if (!user) {
     console.error("User not found", username)
@@ -1212,7 +1371,7 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       .json({ success: false, message: EError[language as ELanguage] })
   } else if (user) {
     try {
-      // const secret = process.env.JWT_SECRET || 'jgtrshdjfshdf'
+      // const secret = process.env.JWT_SECRET ?? 'jgtrshdjfshdf'
       // const userId = { userId: user._id }
       //const token = jwt.sign(userId, secret, { expiresIn: '1d' })
       //const token = '1234567890'
@@ -1231,7 +1390,7 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
           res.status(200).json({
             success: true,
             message:
-              ETokenSent[language as unknown as ELanguage] || "Token sent",
+              ETokenSent[language as unknown as ELanguage] ?? "Token sent",
           })
         })
         .catch((error) => {
@@ -1239,7 +1398,7 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
           res.status(500).json({
             success: false,
             message:
-              EErrorSendingMail[language as unknown as ELanguage] ||
+              EErrorSendingMail[language as unknown as ELanguage] ??
               "Error sending mail",
           })
         })
@@ -1248,7 +1407,7 @@ const forgotPassword = async (req: Request, res: Response): Promise<void> => {
       res.status(500).json({
         success: false,
         message:
-          EError[(language as unknown as ELanguage) || "en"] || "Error ¤",
+          EError[(language as unknown as ELanguage) ?? "en"] ?? "Error ¤",
       })
     }
   } else {
@@ -1299,13 +1458,11 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
     const existingUser = await User.findOne({ username })
     if (existingUser) {
       res.status(401).json({
-        message:
-          `${ERegistrationFailed[existingUser.language]}. ${
-            EPleaseCheckYourEmailIfYouHaveAlreadyRegistered[
-              existingUser.language
-            ]
-          }` ||
-          "Registration failed, Please check your email if you have already registered",
+        message: `${ERegistrationFailed[existingUser.language]}. ${
+          EPleaseCheckYourEmailIfYouHaveAlreadyRegistered[
+            existingUser.language ?? "en"
+          ]
+        }`,
       })
       return
     }
@@ -1316,7 +1473,7 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
       res.status(400).json({
         success: false,
         message:
-          EPleaseChooseAnotherName[existingName.language] ||
+          EPleaseChooseAnotherName[existingName.language] ??
           "Please choose another name",
       })
       return
@@ -1339,7 +1496,7 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
       console.error(error)
       res.status(500).json({
         success: false,
-        message: EError[(language as ELanguage) || "en"] || "Error ¤",
+        message: EError[(language as ELanguage) ?? "en"] ?? "Error ¤",
         error,
       })
     })
@@ -1362,18 +1519,18 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
           role: savedUser.role,
           verified: savedUser.verified,
         },
-        message: EMessage[language as ELanguage] || "User registered",
+        message: EMessage[language as ELanguage] ?? "User registered",
       })
     } else if (savedUser && !sentEmail) {
       res.status(500).json({
         success: false,
         message:
-          EErrorSendingMail[language as ELanguage] || "Error sending mail",
+          EErrorSendingMail[language as ELanguage] ?? "Error sending mail",
       })
     } else {
       res.status(500).json({
         success: false,
-        message: EError[(language as ELanguage) || "en"] || "Error ¤",
+        message: EError[(language as ELanguage) ?? "en"] ?? "Error ¤",
       })
     }
   } catch (error) {
@@ -1387,10 +1544,10 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
         res.status(401).json({ success: false, message: refresh?.message })
       }
     } else {
-      const language = req.body.language || "en"
+      const language = req.body.language ?? "en"
       res.status(500).json({
         success: false,
-        message: EError[language as ELanguage] || "An error occurred ¤",
+        message: EError[language as ELanguage] ?? "An error occurred ¤",
       })
     }
   }
@@ -1468,13 +1625,13 @@ const refreshExpiredToken = async (
                   .then((r) => {
                     reject({
                       success: false,
-                      message:
-                        `${EEmailMessage[body.language as keyof typeof EEmailMessage]} *,
+                      message: `${EEmailMessage[body.language as keyof typeof EEmailMessage]} *,
                         ${
                           ENewTokenSentToEmail[
-                            body.language as keyof typeof ENewTokenSentToEmail
+                            (body.language as keyof typeof ENewTokenSentToEmail) ??
+                              "en"
                           ]
-                        }` || "Token sent",
+                        }`,
                       user: {
                         _id: user?._id,
                         name: user?.name,
@@ -1491,7 +1648,7 @@ const refreshExpiredToken = async (
                     reject({
                       success: false,
                       message:
-                        EErrorSendingMail[req.body.language as ELanguage] ||
+                        EErrorSendingMail[req.body.language as ELanguage] ??
                         "Error sending mail ¤",
                     })
                   })
@@ -1505,7 +1662,7 @@ const refreshExpiredToken = async (
             reject({
               success: false,
               message:
-                EError[(req.body.language as ELanguage) || "en"] || "¤ Error",
+                EError[(req.body.language as ELanguage) ?? "en"] ?? "¤ Error",
             })
           })
       } else {
@@ -1533,7 +1690,7 @@ const refreshExpiredToken = async (
               )
               return
             } else {
-              // const secret = process.env.JWT_SECRET || 'jgtrshdjfshdf'
+              // const secret = process.env.JWT_SECRET ?? 'jgtrshdjfshdf'
               // jwt.sign(
               //   { userId: user._id },
               //   secret,
@@ -1544,7 +1701,7 @@ const refreshExpiredToken = async (
               //       reject({
               //         success: false,
               //         message:
-              //           EErrorCreatingToken[req.body.language as ELanguage] ||
+              //           EErrorCreatingToken[req.body.language as ELanguage] ??
               //           'Error creating token',
               //       })
               //     } else {
@@ -1563,16 +1720,17 @@ const refreshExpiredToken = async (
                 .then((r) => {
                   resolve({
                     success: true,
-                    message:
-                      ` ${
-                        EUserNotVerified[
-                          req.body.language as keyof typeof EUserNotVerified
-                        ]
-                      }. ${
-                        ENewTokenSentToEmail[
-                          body.language as keyof typeof ENewTokenSentToEmail
-                        ]
-                      }` || "New link sent to email",
+                    message: ` ${
+                      EUserNotVerified[
+                        (req.body.language as keyof typeof EUserNotVerified) ??
+                          "en"
+                      ]
+                    }. ${
+                      ENewTokenSentToEmail[
+                        (body.language as keyof typeof ENewTokenSentToEmail) ??
+                          "en"
+                      ]
+                    }`,
                     user: {
                       _id: user._id,
                       name: user.name,
@@ -1589,7 +1747,7 @@ const refreshExpiredToken = async (
                   reject({
                     success: false,
                     message:
-                      EErrorSendingMail[req.body.language as ELanguage] ||
+                      EErrorSendingMail[req.body.language as ELanguage] ??
                       "Error sending mail ¤",
                   })
                 })
@@ -1603,7 +1761,7 @@ const refreshExpiredToken = async (
             reject({
               success: false,
               message:
-                EError[(req.body.language as ELanguage) || "en"] || "¤ Error",
+                EError[(req.body.language as ELanguage) ?? "en"] ?? "¤ Error",
             })
           })
       }
@@ -1611,14 +1769,14 @@ const refreshExpiredToken = async (
       console.error("Error:", error)
       reject({
         success: false,
-        message: EError[(req.body.language as ELanguage) || "en"],
+        message: EError[(req.body.language as ELanguage) ?? "en"],
       })
     }
   })
 }
 
 const requestNewToken = async (req: Request, res: Response): Promise<void> => {
-  const language = req.body.language || req.query.lang || "en"
+  const language = req.body.language ?? req.query.lang ?? "en"
   if (!req.body.username) {
     res.status(400).json({
       success: false,
@@ -1687,7 +1845,7 @@ const verifyEmailToken = async (req: Request, res: Response): Promise<void> => {
         fi = "Tilisi on vahvistettu onnistuneesti",
       }
 
-      const language = req.query.lang || "en"
+      const language = req.query.lang ?? "en"
       const htmlResponse = `
     <html lang=${language ?? "en"}>
       <head>
@@ -1724,7 +1882,7 @@ const verifyEmailToken = async (req: Request, res: Response): Promise<void> => {
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
       <div>
@@ -1747,7 +1905,7 @@ const verifyEmailToken = async (req: Request, res: Response): Promise<void> => {
   `
       res.send(htmlResponse)
     } else {
-      const language = req.query.lang || "en"
+      const language = req.query.lang ?? "en"
 
       enum EVerificationFailed {
         en = "Already verified or verification token expired",
@@ -1816,7 +1974,7 @@ const verifyEmailToken = async (req: Request, res: Response): Promise<void> => {
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -1844,13 +2002,13 @@ const findUserByUsername = async (
     console.error("Error:", error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body.language as ELanguage) || "en"],
+      message: EError[(req.body.language as ELanguage) ?? "en"],
     })
   }
 }
 
 const logoutUser = async (req: Request, res: Response): Promise<void> => {
-  const language = req.body.language || req.query.lang || "en"
+  const language = req.body.language ?? req.query.lang ?? "en"
   try {
     res.status(200).json({
       success: true,
@@ -1866,7 +2024,7 @@ const logoutUser = async (req: Request, res: Response): Promise<void> => {
 
 const resetPassword = async (req: Request, res: Response): Promise<void> => {
   const { token } = req.params
-  const language = req.query.lang || "en"
+  const language = req.query.lang ?? "en"
 
   try {
     // Validate the token
@@ -1910,17 +2068,17 @@ const resetPassword = async (req: Request, res: Response): Promise<void> => {
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
       <div>
         <h1>
-          ${EInvalidOrMissingToken[language as ELanguage] || InvalidOrExpiredToken}
+          ${EInvalidOrMissingToken[language as ELanguage] ?? InvalidOrExpiredToken}
         </h1>
         <p>${
           ELogInAtTheAppOrRequestANewPasswordResetToken[
             language as ELanguage
-          ] || "Check the app to request a new password reset token. "
+          ] ?? "Check the app to request a new password reset token. "
         }</p> 
         <p>
         <a href=${process.env.SITE_URL}>${
@@ -1998,11 +2156,11 @@ const resetPassword = async (req: Request, res: Response): Promise<void> => {
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
       <div>
-        <h1>${EJenniinaFi[(language as ELanguage) || "en"]}
+        <h1>${EJenniinaFi[(language as ELanguage) ?? "en"]}
         </h1>
         <h2>${EPasswordReset[language as ELanguage] ?? "Password Reset"}</h2>
         <form action="/api/users/reset/${token}?lang=${language}" method="post">
@@ -2040,7 +2198,7 @@ const resetPasswordToken = async (
 ): Promise<void> => {
   const { token } = req.params
   const { newPassword, confirmPassword } = req.body
-  const language = req.query.lang || "en"
+  const language = req.query.lang ?? "en"
 
   enum EPasswordResetSuccessfully {
     en = "Password reset successfully",
@@ -2072,7 +2230,7 @@ const resetPasswordToken = async (
         // res.status(400).json({
         //   success: false,
         //   message:
-        //     EPasswordsDoNotMatch[language as keyof typeof EPasswordsDoNotMatch] ||
+        //     EPasswordsDoNotMatch[language as keyof typeof EPasswordsDoNotMatch] ??
         //     'Passwords do not match',
         // })
         const htmlResponse = `
@@ -2141,7 +2299,7 @@ const resetPasswordToken = async (
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
       <div>
@@ -2178,7 +2336,10 @@ const resetPasswordToken = async (
         //   .save()
         const updatedUser = await User.findOneAndUpdate(
           { resetToken: token },
-          { $set: { password: hashedPassword, resetToken: null } },
+          {
+            $set: { password: hashedPassword, resetToken: null },
+            $inc: { tokenVersion: 1 },
+          },
           { new: true }
         ).exec()
         if (updatedUser) {
@@ -2219,14 +2380,14 @@ const resetPasswordToken = async (
           }
         </style>
         <title>
-        ${EJenniinaFi[(language as ELanguage) || "en"]}</title>
+        ${EJenniinaFi[(language as ELanguage) ?? "en"]}</title>
       </head>
       <body>
       <div>
         <h1>${
           EPasswordResetSuccessfully[
             language as keyof typeof EPasswordResetSuccessfully
-          ] || "Password reset successfully"
+          ] ?? "Password reset successfully"
         }</h1>
         <p>
         <a href=${process.env.SITE_URL}/?login=login>${
@@ -2272,13 +2433,13 @@ const deleteUser = async (req: Request, res: Response): Promise<void> => {
     res.status(200).json({
       success: true,
       message:
-        EUserDeleted[(req.body?.language as unknown as ELanguage) || "en"],
+        EUserDeleted[(req.body?.language as unknown as ELanguage) ?? "en"],
     })
   } catch (error) {
     console.error(error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body?.language as ELanguage) || "en"],
+      message: EError[(req.body?.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -2307,20 +2468,20 @@ const addToBlacklistedJokes = async (
     if (user) {
       res.status(200).json({
         success: true,
-        message: EJokeHidden[(language as unknown as ELanguage) || "en"],
+        message: EJokeHidden[(language as unknown as ELanguage) ?? "en"],
         user,
       })
     } else {
       res.status(404).json({
         success: false,
-        message: EError[(language as unknown as ELanguage) || "en"],
+        message: EError[(language as unknown as ELanguage) ?? "en"],
       })
     }
   } catch (error) {
     console.error(error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body?.language as ELanguage) || "en"],
+      message: EError[(req.body?.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -2339,20 +2500,20 @@ const removeJokeFromBlacklisted = async (
     if (user) {
       res.status(200).json({
         success: true,
-        message: EJokeRestored[(language as ELanguage) || "en"],
+        message: EJokeRestored[(language as ELanguage) ?? "en"],
         user,
       })
     } else {
       res.status(404).json({
         success: false,
-        message: EError[(language as ELanguage) || "en"],
+        message: EError[(language as ELanguage) ?? "en"],
       })
     }
   } catch (error) {
     console.error(error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body?.language as ELanguage) || "en"],
+      message: EError[(req.body?.language as ELanguage) ?? "en"],
     })
   }
 }
@@ -2385,4 +2546,6 @@ export {
   comparePassword,
   addToBlacklistedJokes,
   removeJokeFromBlacklisted,
+  revokeUserSessions,
+  authPing,
 }
