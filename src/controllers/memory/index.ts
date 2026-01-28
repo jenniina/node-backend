@@ -1,101 +1,110 @@
-import { Request, Response } from 'express'
-import { Memory } from '../../models/memory'
-import { EError, ELanguages } from '../../types'
+import { Request, Response } from "express"
+import { Memory } from "../../models/memory"
+import { EError, ELanguages } from "../../types"
+import { sendMail } from "../email"
 
 enum EHighScoreAddedSuccessfully {
-  en = 'High score added successfully',
-  es = 'Puntuación alta añadida con éxito',
-  fr = 'Score élevé ajouté avec succès',
-  de = 'Highscore erfolgreich hinzugefügt',
-  pt = 'Pontuação alta adicionada com sucesso',
-  cs = 'High score úspěšně přidán',
-  fi = 'Tulos lisätty onnistuneesti',
+  en = "High score added successfully",
+  es = "Puntuación alta añadida con éxito",
+  fr = "Score élevé ajouté avec succès",
+  de = "Highscore erfolgreich hinzugefügt",
+  pt = "Pontuação alta adicionada com sucesso",
+  cs = "High score úspěšně přidán",
+  fi = "Tulos lisätty onnistuneesti",
 }
 enum EErrorAddingHighScore {
-  en = 'Error adding high score',
-  es = 'Error al agregar puntuación alta',
+  en = "Error adding high score",
+  es = "Error al agregar puntuación alta",
   fr = "Erreur lors de l'ajout du score élevé",
-  de = 'Fehler beim Hinzufügen des Highscores',
-  pt = 'Erro ao adicionar pontuação alta',
-  cs = 'Chyba při přidávání vysokého skóre',
-  fi = 'Virhe tuloksen lisäämisessä',
+  de = "Fehler beim Hinzufügen des Highscores",
+  pt = "Erro ao adicionar pontuação alta",
+  cs = "Chyba při přidávání vysokého skóre",
+  fi = "Virhe tuloksen lisäämisessä",
 }
 
 enum EErrorRetrievingHighScores {
-  en = 'Error retrieving high scores',
-  es = 'Error al recuperar las puntuaciones más altas',
-  fr = 'Erreur lors de la récupération des scores élevés',
-  de = 'Fehler beim Abrufen der Highscores',
-  pt = 'Erro ao recuperar pontuações altas',
-  cs = 'Chyba při získávání vysokých skóre',
-  fi = 'Virhe pisteiden noutamisessa',
+  en = "Error retrieving high scores",
+  es = "Error al recuperar las puntuaciones más altas",
+  fr = "Erreur lors de la récupération des scores élevés",
+  de = "Fehler beim Abrufen der Highscores",
+  pt = "Erro ao recuperar pontuações altas",
+  cs = "Chyba při získávání vysokých skóre",
+  fi = "Virhe pisteiden noutamisessa",
 }
 enum EHighScoreNotFound {
-  en = 'High score not found',
-  es = 'Puntuación alta no encontrada',
-  fr = 'Score élevé non trouvé',
-  de = 'Highscore nicht gefunden',
-  pt = 'Pontuação alta não encontrada',
-  cs = 'Vysoké skóre nebylo nalezeno',
-  fi = 'Tulosta ei löytynyt',
+  en = "High score not found",
+  es = "Puntuación alta no encontrada",
+  fr = "Score élevé non trouvé",
+  de = "Highscore nicht gefunden",
+  pt = "Pontuação alta não encontrada",
+  cs = "Vysoké skóre nebylo nalezeno",
+  fi = "Tulosta ei löytynyt",
 }
 enum EHighScoreDeletedSuccessfully {
-  en = 'High score deleted successfully',
-  es = 'Puntuación alta eliminada con éxito',
-  fr = 'Score élevé supprimé avec succès',
-  de = 'Highscore erfolgreich gelöscht',
-  pt = 'Pontuação alta excluída com sucesso',
-  cs = 'Vysoké skóre bylo úspěšně smazáno',
-  fi = 'Tulos poistettu onnistuneesti',
+  en = "High score deleted successfully",
+  es = "Puntuación alta eliminada con éxito",
+  fr = "Score élevé supprimé avec succès",
+  de = "Highscore erfolgreich gelöscht",
+  pt = "Pontuação alta excluída com sucesso",
+  cs = "Vysoké skóre bylo úspěšně smazáno",
+  fi = "Tulos poistettu onnistuneesti",
 }
 enum EErrorDeletingHighScore {
-  en = 'Error deleting high score',
-  es = 'Error al eliminar la puntuación alta',
-  fr = 'Erreur lors de la suppression du score élevé',
-  de = 'Fehler beim Löschen des Highscores',
-  pt = 'Erro ao excluir pontuação alta',
-  cs = 'Chyba při mazání vysokého skóre',
-  fi = 'Virhe tuloksen poistamisessa',
+  en = "Error deleting high score",
+  es = "Error al eliminar la puntuación alta",
+  fr = "Erreur lors de la suppression du score élevé",
+  de = "Fehler beim Löschen des Highscores",
+  pt = "Erro ao excluir pontuação alta",
+  cs = "Chyba při mazání vysokého skóre",
+  fi = "Virhe tuloksen poistamisessa",
 }
 enum EHighScoreUpdatedSuccessfully {
-  en = 'High score updated successfully',
-  es = 'Puntuación alta actualizada con éxito',
-  fr = 'Score élevé mis à jour avec succès',
-  de = 'Highscore erfolgreich aktualisiert',
-  pt = 'Pontuação alta atualizada com sucesso',
-  cs = 'Vysoké skóre úspěšně aktualizováno',
-  fi = 'Tulos päivitetty onnistuneesti',
+  en = "High score updated successfully",
+  es = "Puntuación alta actualizada con éxito",
+  fr = "Score élevé mis à jour avec succès",
+  de = "Highscore erfolgreich aktualisiert",
+  pt = "Pontuação alta atualizada com sucesso",
+  cs = "Vysoké skóre úspěšně aktualizováno",
+  fi = "Tulos päivitetty onnistuneesti",
 }
 enum EErrorUpdatingHighScore {
-  en = 'Error updating high score',
-  es = 'Error al actualizar la puntuación alta',
-  fr = 'Erreur lors de la mise à jour du score élevé',
-  de = 'Fehler beim Aktualisieren des Highscores',
-  pt = 'Erro ao atualizar pontuação alta',
-  cs = 'Chyba při aktualizaci vysokého skóre',
-  fi = 'Virhe tuloksen päivittämisessä',
+  en = "Error updating high score",
+  es = "Error al actualizar la puntuación alta",
+  fr = "Erreur lors de la mise à jour du score élevé",
+  de = "Fehler beim Aktualisieren des Highscores",
+  pt = "Erro ao atualizar pontuação alta",
+  cs = "Chyba při aktualizaci vysokého skóre",
+  fi = "Virhe tuloksen päivittämisessä",
 }
 
 enum EPlayerNameUpdatedSuccessfully {
-  en = 'Player name updated successfully in all games',
-  es = 'Nombre de jugador actualizado con éxito en todos los juegos',
-  fr = 'Nom du joueur mis à jour avec succès dans tous les jeux',
-  de = 'Spielername erfolgreich in allen Spielen aktualisiert',
-  pt = 'Nome do jogador atualizado com sucesso em todos os jogos',
-  cs = 'Jméno hráče úspěšně aktualizováno ve všech hrách',
-  fi = 'Pelaajan nimi päivitetty onnistuneesti kaikissa peleissä',
+  en = "Player name updated successfully in all games",
+  es = "Nombre de jugador actualizado con éxito en todos los juegos",
+  fr = "Nom du joueur mis à jour avec succès dans tous les jeux",
+  de = "Spielername erfolgreich in allen Spielen aktualisiert",
+  pt = "Nome do jogador atualizado com sucesso em todos os jogos",
+  cs = "Jméno hráče úspěšně aktualizováno ve všech hrách",
+  fi = "Pelaajan nimi päivitetty onnistuneesti kaikissa peleissä",
 }
 
 enum EErrorUpdatingPlayerName {
-  en = 'Error updating player name',
-  es = 'Error al actualizar el nombre del jugador',
-  fr = 'Erreur lors de la mise à jour du nom du joueur',
-  de = 'Fehler beim Aktualisieren des Spielernamens',
-  pt = 'Erro ao atualizar o nome do jogador',
-  cs = 'Chyba při aktualizaci jména hráče',
-  fi = 'Virhe pelaajan nimen päivittämisessä',
+  en = "Error updating player name",
+  es = "Error al actualizar el nombre del jugador",
+  fr = "Erreur lors de la mise à jour du nom du joueur",
+  de = "Fehler beim Aktualisieren des Spielernamens",
+  pt = "Erro ao atualizar o nome do jogador",
+  cs = "Chyba při aktualizaci jména hráče",
+  fi = "Virhe pelaajan nimen päivittämisessä",
 }
-
+enum EHighScoreDoesntQualifyForTopFive {
+  en = "High score doesn't qualify for top five",
+  es = "La puntuación alta no califica para los cinco primeros",
+  fr = "Le score élevé ne se qualifie pas pour les cinq premiers",
+  de = "Highscore qualifiziert sich nicht für die Top Fünf",
+  pt = "Pontuação alta não se qualifica para os cinco primeiros",
+  cs = "Vysoké skóre se nekvalifikuje do první pětky",
+  fi = "Tulos ei kelpaa viiden parhaan joukkoon",
+}
 export const cleanUpHighScores = async (req: Request, res: Response) => {
   try {
     const { levelKey, language } = req.params as {
@@ -109,8 +118,12 @@ export const cleanUpHighScores = async (req: Request, res: Response) => {
       createdAt: 1,
     })
 
-    const singlePlayerScores = highScores.filter((score) => score.players.length === 1)
-    const twoPlayerScores = highScores.filter((score) => score.players.length === 2)
+    const singlePlayerScores = highScores.filter(
+      (score) => score.players.length === 1
+    )
+    const twoPlayerScores = highScores.filter(
+      (score) => score.players.length === 2
+    )
 
     const getScoresToKeepAndDelete = (scores: typeof highScores) => {
       return {
@@ -129,9 +142,9 @@ export const cleanUpHighScores = async (req: Request, res: Response) => {
     )
     await Promise.all(deletePromises)
 
-    console.log('Cleaning OK')
+    console.log("Cleaning OK")
   } catch (error) {
-    console.log('Cleaning error', error)
+    console.log("Cleaning error", error)
     const language = req.params.language as ELanguages
     res.status(500).json({
       success: false,
@@ -194,6 +207,16 @@ export const addHighScore = async (req: Request, res: Response) => {
 
       await cleanUpHighScores(req, res)
 
+      // Send notification email about the new high score to check for possible profanity
+      await sendMail(
+        `Memory Game New High Score Added - Level: ${levelKey}`,
+        `A new high score has been added.\n\nLevel Key: ${levelKey}\nTime: ${time}\nSize: ${size}\nType: ${type}\nPlayers: ${players
+          .map((p: { name: string; score: number }) => `${p.name} (${p.score})`)
+          .join(", ")}`,
+        process.env.NODEMAILER_USER || "",
+        "https://react.jenniina.fi/portfolio/memory"
+      )
+
       res.status(201).json({
         success: true,
         message: EHighScoreAddedSuccessfully[language],
@@ -202,7 +225,7 @@ export const addHighScore = async (req: Request, res: Response) => {
     } else {
       res.status(200).json({
         success: false,
-        message: 'High score does not qualify for the top five',
+        message: EHighScoreDoesntQualifyForTopFive[language],
       })
     }
   } catch (error) {
@@ -268,17 +291,20 @@ export const updateHighScore = async (req: Request, res: Response) => {
   }
 }
 
-export const deleteHighScoresByPlayerName = async (req: Request, res: Response) => {
+export const deleteHighScoresByPlayerName = async (
+  req: Request,
+  res: Response
+) => {
   try {
     const { playerName, language } = req.params
-    const highScores = await Memory.find({ 'players.name': playerName })
+    const highScores = await Memory.find({ "players.name": playerName })
     if (highScores.length === 0) {
       return res.status(404).json({
         success: false,
         message: EHighScoreNotFound[language as ELanguages],
       })
     }
-    await Memory.deleteMany({ 'players.name': playerName })
+    await Memory.deleteMany({ "players.name": playerName })
     res.status(200).json({
       success: true,
       message: EHighScoreDeletedSuccessfully[language as ELanguages],
@@ -300,15 +326,15 @@ export const changePlayerName = async (req: Request, res: Response) => {
     if (!oldName || !newName) {
       return res.status(400).json({
         success: false,
-        message: 'oldName and newName are required in the request body',
+        message: "oldName and newName are required in the request body",
       })
     }
 
     // Update all players with the oldName to the newName
     const updateResult = await Memory.updateMany(
-      { 'players.name': oldName },
-      { $set: { 'players.$[elem].name': newName } },
-      { arrayFilters: [{ 'elem.name': oldName }] }
+      { "players.name": oldName },
+      { $set: { "players.$[elem].name": newName } },
+      { arrayFilters: [{ "elem.name": oldName }] }
     )
 
     if (updateResult.modifiedCount === 0) {
@@ -324,7 +350,7 @@ export const changePlayerName = async (req: Request, res: Response) => {
       modifiedCount: updateResult.modifiedCount,
     })
   } catch (error) {
-    console.error('Error updating player name:', error)
+    console.error("Error updating player name:", error)
     const language = req.params.language as ELanguages
     res.status(500).json({
       success: false,
