@@ -1,4 +1,5 @@
 import { Router, Response, Request, NextFunction } from "express"
+import { rateLimit } from "../middleware/rateLimit"
 const { body, check, validationResult } = require("express-validator")
 const { sendEmailForm, sendEmailSelect } = require("../controllers/email")
 import {
@@ -98,6 +99,38 @@ import { getQuotes } from "../controllers/quotes"
 
 const router = Router()
 
+const rateLimitMessage = "Too many requests, please try again later."
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: rateLimitMessage,
+})
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: rateLimitMessage,
+})
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: rateLimitMessage,
+})
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: rateLimitMessage,
+})
+
+const tokenIssueLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: rateLimitMessage,
+})
+
 const validateNewOrderEmail = [
   check("info.email")
     .isEmail()
@@ -109,13 +142,13 @@ const validateNewOrderEmail = [
     ),
 ]
 
-router.post("/login", loginUser)
+router.post("/login", loginLimiter, loginUser)
 
 router.get("/auth/ping", [authenticateUser], authPing)
 
-router.post("/users/forgot", forgotPassword)
+router.post("/users/forgot", forgotPasswordLimiter, forgotPassword)
 router.get("/users/reset/:token", resetPassword)
-router.post("/users/reset/:token", resetPasswordToken)
+router.post("/users/reset/:token", resetPasswordLimiter, resetPasswordToken)
 router.get("/users/reset-username/:token", resetUsernameChange)
 //router.get('/users', [authenticateUser, checkIfAdmin, getUsers])
 router.get("/users", getUsers)
@@ -125,11 +158,11 @@ router.put("/users/:id", [comparePassword, updateUser])
 router.put("/users/", [comparePassword, updateUsername])
 router.get("/users/:username/confirm-email/:token", confirmEmail)
 router.delete("/users/:id/:deleteJokes", [authenticateUser, deleteUser])
-router.post("/users/register", registerUser)
+router.post("/users/register", registerLimiter, registerUser)
 router.get("/users/verify/:token", verifyEmailToken)
 router.get("/users/logout", logoutUser)
 //router.get('/users/verify/:token', [verifyTokenMiddleware, verifyEmailToken])
-router.post("/users/:id", generateToken)
+router.post("/users/:id", tokenIssueLimiter, generateToken)
 router.get("/users/username/:username", findUserByUsername)
 router.post(
   "/users/:id/revoke-sessions",
