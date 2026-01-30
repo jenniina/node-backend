@@ -432,7 +432,9 @@ const verifyUsernameChangeResetToken = (
 const getAuthenticatedUserFromRequest = async (
   req: Request
 ): Promise<IUser | null> => {
-  const existing = (req.body?.user as IUser | undefined) ?? undefined
+  const existing = ((req as unknown as { user?: IUser }).user as
+    | IUser
+    | undefined) ?? (req.body?.user as IUser | undefined)
   if (existing) return existing
 
   const token = req.headers.authorization?.split(" ")[1]
@@ -475,8 +477,7 @@ const authenticateUser = async (
       throw new Error("Token revoked")
     }
 
-    // Attach user information to the request object
-    req.body.user = user
+    ;(req as unknown as { user?: IUser }).user = user
     next()
   } catch (error) {
     //throw new Error((error as Error).message)
@@ -875,9 +876,9 @@ const revokeUserSessions = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  console.log(req.params.id, req.body.user)
+  // Intentionally avoid logging user objects/tokens in auth flows.
   try {
-    const requester = req.body.user as IUser | undefined
+    const requester = (req as unknown as { user?: IUser }).user
     if (!requester) {
       res.status(401).json({
         success: false,
@@ -927,7 +928,7 @@ const revokeUserSessions = async (
 
 const authPing = async (req: Request, res: Response): Promise<void> => {
   try {
-    const requester = req.body.user as IUser | undefined
+    const requester = (req as unknown as { user?: IUser }).user
     if (!requester) {
       res
         .status(401)
@@ -1119,7 +1120,7 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
 
     const { password, _id, name } = body
 
-    const authUser = req.body?.user as IUser | undefined
+    const authUser = (req as unknown as { user?: IUser }).user
     const targetUserId = (req.params.id as string | undefined) ?? _id
     if (
       authUser &&
@@ -1244,7 +1245,7 @@ const comparePassword = async (
   }
   try {
     const { _id, passwordOld, language } = req.body
-    const authUser = req.body?.user as IUser | undefined
+    const authUser = (req as unknown as { user?: IUser }).user
     const targetUserId = (authUser?._id as unknown as string | undefined) ?? _id
     const user: IUser | null = await User.findById(targetUserId)
 
@@ -2460,7 +2461,7 @@ const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id, deleteJokes } = req.params
 
-    const authUser = req.body?.user as IUser | undefined
+    const authUser = (req as unknown as { user?: IUser }).user
     if (!authUser) {
       res.status(401).json({
         success: false,
@@ -2517,7 +2518,7 @@ const addToBlacklistedJokes = async (
     const { id, jokeId, language } = req.params
     const { value } = req.body
 
-    const authUser = req.body?.user as IUser | undefined
+    const authUser = (req as unknown as { user?: IUser }).user
     if (!authUser || String(authUser._id) !== String(id)) {
       res.status(403).json({
         success: false,
@@ -2568,7 +2569,7 @@ const removeJokeFromBlacklisted = async (
   try {
     const { id, joke_id, language } = req.params
 
-    const authUser = req.body?.user as IUser | undefined
+    const authUser = (req as unknown as { user?: IUser }).user
     if (!authUser || String(authUser._id) !== String(id)) {
       res.status(403).json({
         success: false,

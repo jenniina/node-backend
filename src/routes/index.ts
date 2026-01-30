@@ -188,14 +188,27 @@ router.get("/users/:id/safe/:safe/jokes", getJokesByUserAndSafe)
 
 //router.put('/users/request-new-token', refreshExpiredToken)
 
-router.get("/blobs/:user/:d", getAllBlobsByUser)
-router.get("/blobs/:user/:d/:versionName/:language", getBlobsVersionByUser)
-router.post("/blobs/:user/:d/:versionName/:language", saveBlobsByUser)
+router.get("/blobs/:user/:d", [authenticateUser], getAllBlobsByUser)
+router.get(
+  "/blobs/:user/:d/:versionName/:language",
+  [authenticateUser],
+  getBlobsVersionByUser
+)
+router.post(
+  "/blobs/:user/:d/:versionName/:language",
+  [authenticateUser],
+  saveBlobsByUser
+)
 router.delete(
   "/blobs/:user/:d/:versionName/:language",
+  [authenticateUser],
   deleteBlobsVersionByUser
 )
-router.put("/blobs/:user/:d/:versionName/:language", editBlobsByUser)
+router.put(
+  "/blobs/:user/:d/:versionName/:language",
+  [authenticateUser],
+  editBlobsByUser
+)
 
 router.get(
   "/jokes/:jokeId/:language/:category/:type",
@@ -209,34 +222,51 @@ router.get("/jokes/user/:id/", getJokesByUserId)
 router.delete("/jokes/:id/delete-user/:userId", deleteUserFromJoke)
 
 //router.get('/quiz', getQuizzes)
-router.post("/quiz", addQuiz)
-router.put("/quiz", addQuiz)
-router.get("/quiz/:id", getUserQuiz)
-router.delete("/quiz/remove/:user", removeOldestDuplicate)
+router.get("/quiz/:id", [authenticateUser], getUserQuiz)
+router.post("/quiz", [authenticateUser], addQuiz)
+router.put("/quiz", [authenticateUser], addQuiz)
+router.delete("/quiz/remove/:user", [authenticateUser], removeOldestDuplicate)
 
 router.get("/highscores/:language", getAllHighScores)
 router.post("/highscores/:language/key/:levelKey", addHighScore)
 router.get("/highscores/:language/key/:levelKey", getHighScoresByLevel)
-router.put("/highscores/:language/id/:id", checkIfManagement, updateHighScore)
-router.delete("/highscores/:language/id/:id", deleteHighScore)
+router.put(
+  "/highscores/:language/id/:id",
+  [authenticateUser, checkIfManagement],
+  updateHighScore
+)
+router.delete(
+  "/highscores/:language/id/:id",
+  [authenticateUser, checkIfManagement],
+  deleteHighScore
+)
 router.delete(
   "/highscores/:language/player/:playerName",
+  [authenticateUser, checkIfManagement],
   deleteHighScoresByPlayerName
 )
-router.put("/highscores/:language/player", checkIfManagement, changePlayerName)
-router.post("/highscores/:language/cleanup/:levelKey", cleanUpHighScores)
+router.put(
+  "/highscores/:language/player",
+  [authenticateUser, checkIfManagement],
+  changePlayerName
+)
+router.post(
+  "/highscores/:language/cleanup/:levelKey",
+  [authenticateUser, checkIfManagement],
+  cleanUpHighScores
+)
 
 router.get("/images/:language", searchImages)
 
 router.get("/quotes/:language/:category", getQuotes)
 
-router.get("/todo/:user", getTodos)
-router.put("/todo/:user", updateAllTodos)
-router.post("/todo/:user", addTodo)
-router.delete("/todo/:user/:key", deleteTodo)
-router.put("/todo/:user/:key", editTodo)
-router.delete("/todo/:user", clearCompletedTodos)
-router.post("/todo/:user/order", editTodoOrder)
+router.get("/todo/:user", [authenticateUser], getTodos)
+router.put("/todo/:user", [authenticateUser], updateAllTodos)
+router.post("/todo/:user", [authenticateUser], addTodo)
+router.delete("/todo/:user/:key", [authenticateUser], deleteTodo)
+router.put("/todo/:user/:key", [authenticateUser], editTodo)
+router.delete("/todo/:user", [authenticateUser], clearCompletedTodos)
+router.post("/todo/:user/order", [authenticateUser], editTodoOrder)
 // router.put('/todo', addOrderToAllTodos)
 // router.put('/todo/', addNewFieldsToTodos)
 
