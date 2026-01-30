@@ -1,19 +1,36 @@
-import { Request, Response } from 'express'
-import { EError, ELanguage, EThisVersionNameAlreadyExists } from '../../types'
-import { Blobs } from '../../models/blobs'
+import { Request, Response } from "express"
+import { EError, ELanguage } from "../../types"
+import { Blobs } from "../../models/blobs"
 import {
   EBlobsSavedSuccessfully,
   EErrorSavingData,
   ECouldNotFindDataWithThisName,
-} from '../../types'
+} from "../../types"
 
 const handleError = (res: Response, error: any, language: ELanguage) => {
   console.error(error)
   res.status(500).send(`${EError[language]}: ${(error as Error).message}`)
 }
 
+const getAuthUserId = (req: Request): string | undefined => {
+  const authUser = (req as unknown as { user?: { _id?: unknown } }).user
+  const id = authUser?._id
+  return id ? String(id) : undefined
+}
+
+const ensureSelf = (req: Request, res: Response): boolean => {
+  const authUserId = getAuthUserId(req)
+  const targetUserId = String(req.params.user)
+  if (!authUserId || authUserId !== targetUserId) {
+    res.status(403).send("Forbidden")
+    return false
+  }
+  return true
+}
+
 export const getAllBlobsByUser = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const {
       params: { user, d },
       query: { language },
@@ -22,12 +39,16 @@ export const getAllBlobsByUser = async (req: Request, res: Response) => {
     if (!user || !d || !language) {
       return res
         .status(400)
-        .send(`'Invalid request params': user: ${user}, d: ${d} language: ${language}`)
+        .send(
+          `'Invalid request params': user: ${user}, d: ${d} language: ${language}`
+        )
     }
 
     const blobs = await Blobs.find({ user, d }).sort({ d: 1, versionName: 1 })
     if (!blobs) {
-      return res.status(404).send(ECouldNotFindDataWithThisName[language as ELanguage])
+      return res
+        .status(404)
+        .send(ECouldNotFindDataWithThisName[language as ELanguage])
     }
     res.status(200).send(blobs)
   } catch (error) {
@@ -37,6 +58,7 @@ export const getAllBlobsByUser = async (req: Request, res: Response) => {
 
 export const getBlobsVersionByUser = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const {
       params: { user, d, versionName, language },
     } = req
@@ -54,7 +76,9 @@ export const getBlobsVersionByUser = async (req: Request, res: Response) => {
       versionName: 1,
     })
     if (!blobs) {
-      return res.status(404).send(ECouldNotFindDataWithThisName[language as ELanguage])
+      return res
+        .status(404)
+        .send(ECouldNotFindDataWithThisName[language as ELanguage])
     }
     res.status(200).send(blobs)
   } catch (error) {
@@ -64,17 +88,25 @@ export const getBlobsVersionByUser = async (req: Request, res: Response) => {
 
 export const saveBlobsByUser = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const {
       params: { user, d, versionName, language },
     } = req
     const { draggables, backgroundColor } = req.body
 
-    if (!user || !versionName || !d || !draggables || !backgroundColor || !language) {
+    if (
+      !user ||
+      !versionName ||
+      !d ||
+      !draggables ||
+      !backgroundColor ||
+      !language
+    ) {
       return res
         .status(400)
         .send(
           `'Invalid request params or body': user: ${user}, versionName: ${versionName}, d: ${d}, draggables: ${draggables}, backgroundColor: ${backgroundColor.join(
-            ', '
+            ", "
           )}, language: ${language}`
         )
     }
@@ -93,17 +125,25 @@ export const saveBlobsByUser = async (req: Request, res: Response) => {
 
 export const editBlobsByUser = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const {
       params: { d, user, versionName, language },
     } = req
     const { draggables, backgroundColor, newVersionName } = req.body
 
-    if (!user || !versionName || !d || !draggables || !backgroundColor || !language) {
+    if (
+      !user ||
+      !versionName ||
+      !d ||
+      !draggables ||
+      !backgroundColor ||
+      !language
+    ) {
       return res
         .status(400)
         .send(
           `'Invalid request params or body': user: ${user}, versionName: ${versionName}, d: ${d}, draggables: ${draggables}, backgroundColor: ${backgroundColor.join(
-            ', '
+            ", "
           )}, language: ${language}`
         )
     }
@@ -121,7 +161,7 @@ export const editBlobsByUser = async (req: Request, res: Response) => {
     )
 
     if (!updatedBlob) {
-      return res.status(404).send('Blob not found')
+      return res.status(404).send("Blob not found")
     }
 
     res.status(200).send(EBlobsSavedSuccessfully[language as ELanguage])
@@ -132,6 +172,7 @@ export const editBlobsByUser = async (req: Request, res: Response) => {
 
 export const deleteBlobsVersionByUser = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const {
       params: { user, d, versionName, language },
     } = req
@@ -146,7 +187,9 @@ export const deleteBlobsVersionByUser = async (req: Request, res: Response) => {
 
     const blobs = await Blobs.findOneAndDelete({ user, d, versionName })
     if (!blobs) {
-      return res.status(404).send(ECouldNotFindDataWithThisName[language as ELanguage])
+      return res
+        .status(404)
+        .send(ECouldNotFindDataWithThisName[language as ELanguage])
     }
     res.status(200).send(EBlobsSavedSuccessfully[language as ELanguage])
   } catch (error) {

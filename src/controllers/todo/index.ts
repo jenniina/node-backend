@@ -1,7 +1,23 @@
-import { Todo } from '../../models/todo'
-import { Response, Request } from 'express'
-import { ITodo, ITodos } from '../../types'
-import mongoose from 'mongoose'
+import { Todo } from "../../models/todo"
+import { Response, Request } from "express"
+import { ITodo, ITodos } from "../../types"
+import mongoose from "mongoose"
+
+const getAuthUserId = (req: Request): string | undefined => {
+  const authUser = (req as unknown as { user?: { _id?: unknown } }).user
+  const id = authUser?._id
+  return id ? String(id) : undefined
+}
+
+const ensureSelf = (req: Request, res: Response): boolean => {
+  const authUserId = getAuthUserId(req)
+  const targetUserId = String(req.params.user)
+  if (!authUserId || authUserId !== targetUserId) {
+    res.status(403).json({ success: false, message: "Forbidden" })
+    return false
+  }
+  return true
+}
 
 // const addNewFieldsToTodos = async () => {
 //   try {
@@ -31,6 +47,7 @@ import mongoose from 'mongoose'
 
 const getTodos = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user } = req.params
     const todoDocument = await Todo.findOne({ user })
     if (!todoDocument) {
@@ -41,12 +58,13 @@ const getTodos = async (req: Request, res: Response) => {
     res.json(todoDocument?.todos)
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const updateAllTodos = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user } = req.params
     const newTodos: ITodo[] = req.body
     let todoDocument = await Todo.findOne({ user })
@@ -62,31 +80,32 @@ const updateAllTodos = async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const addTodo = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user } = req.params
     const todoDocument = await Todo.findOne({ user })
     if (!todoDocument) {
       return res
         .status(404)
-        .json({ success: false, message: 'No todos found for this user' })
+        .json({ success: false, message: "No todos found for this user" })
     }
     const { complete, name, key, priority, category, deadline } = req.body
 
     if (complete === undefined || name === undefined || key === undefined) {
       return res.status(400).json({
         success: false,
-        message: 'Task must include complete, name, and key fields',
+        message: "Task must include complete, name, and key fields",
       })
     }
 
     let newOrder: number
 
-    if (priority === 'high') {
+    if (priority === "high") {
       newOrder = 0
     } else {
       const maxOrder =
@@ -113,9 +132,11 @@ const addTodo = async (req: Request, res: Response) => {
     if (!updatedTodoDocument) {
       return res
         .status(404)
-        .json({ success: false, message: 'No todos found for this user' })
+        .json({ success: false, message: "No todos found for this user" })
     }
-    const addedTodo = updatedTodoDocument.todos.find((todo: ITodo) => todo.key === key)
+    const addedTodo = updatedTodoDocument.todos.find(
+      (todo: ITodo) => todo.key === key
+    )
 
     const sortedTodos: ITodo[] = todoDocument.todos.sort(
       (a: ITodo, b: ITodo) => a.order - b.order
@@ -130,12 +151,13 @@ const addTodo = async (req: Request, res: Response) => {
     res.json(addedTodo)
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const deleteTodo = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user, key } = req.params
     // console.log('deleteTodo user: ', user)
     const updatedTodoDocument = await Todo.findOneAndUpdate(
@@ -146,7 +168,7 @@ const deleteTodo = async (req: Request, res: Response) => {
     if (!updatedTodoDocument) {
       return res
         .status(404)
-        .json({ success: false, message: 'No todos found for this user' })
+        .json({ success: false, message: "No todos found for this user" })
     }
 
     // Sort the todos by the original order
@@ -162,12 +184,13 @@ const deleteTodo = async (req: Request, res: Response) => {
     res.json(updatedTodoDocument)
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const clearCompletedTodos = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     // console.log('user: ', req.params.user)
     const { user } = req.params
     //const userId = new mongoose.Types.ObjectId(user)
@@ -180,27 +203,28 @@ const clearCompletedTodos = async (req: Request, res: Response) => {
     if (!updatedTodoDocument) {
       return res
         .status(404)
-        .json({ success: false, message: 'No todos found for this user' })
+        .json({ success: false, message: "No todos found for this user" })
     }
     res.json(updatedTodoDocument)
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const editTodo = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user, key } = req.params
     const todoDocument = await Todo.findOneAndUpdate(
-      { user, 'todos.key': key },
+      { user, "todos.key": key },
       {
         $set: {
-          'todos.$.complete': req.body.complete,
-          'todos.$.name': req.body.name,
-          'todos.$.priority': req.body.priority,
-          'todos.$.category': req.body.category,
-          'todos.$.deadline': req.body.deadline,
+          "todos.$.complete": req.body.complete,
+          "todos.$.name": req.body.name,
+          "todos.$.priority": req.body.priority,
+          "todos.$.category": req.body.category,
+          "todos.$.deadline": req.body.deadline,
         },
       },
       { new: true }
@@ -208,26 +232,29 @@ const editTodo = async (req: Request, res: Response) => {
     if (!todoDocument) {
       return res
         .status(404)
-        .json({ success: false, message: 'No todos found for this user' })
+        .json({ success: false, message: "No todos found for this user" })
     }
     //return the updated todo
-    const updatedTodo: ITodos = todoDocument.todos.find((todo: ITodo) => todo.key === key)
+    const updatedTodo: ITodos = todoDocument.todos.find(
+      (todo: ITodo) => todo.key === key
+    )
     res.json(updatedTodo)
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: 'Internal server error' })
+    res.status(500).json({ success: false, message: "Internal server error" })
   }
 }
 
 const editTodoOrder = async (req: Request, res: Response) => {
   try {
+    if (!ensureSelf(req, res)) return
     const { user } = req.params
     const todosWithNewOrder = req.body.todos // This should be an array of objects with keys: { key, order }
 
     if (!todosWithNewOrder || !Array.isArray(todosWithNewOrder)) {
       return res.status(400).json({
         success: false,
-        message: 'Todos field is required and it should be an array',
+        message: "Todos field is required and it should be an array",
       })
     }
 
@@ -237,8 +264,8 @@ const editTodoOrder = async (req: Request, res: Response) => {
     for (const todo of todosWithNewOrder) {
       const { key, order } = todo
       const updatedTodoDocument = await Todo.findOneAndUpdate(
-        { user, 'todos.key': key },
-        { $set: { 'todos.$.order': order } },
+        { user, "todos.key": key },
+        { $set: { "todos.$.order": order } },
         { new: true, session }
       )
       if (!updatedTodoDocument) {
