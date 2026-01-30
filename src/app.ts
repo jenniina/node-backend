@@ -4,10 +4,16 @@ import cors from "cors"
 import bodyParser from "body-parser"
 import * as path from "path"
 import routes from "./routes"
+import { rateLimit } from "./middleware/rateLimit"
+import { mongoSanitize } from "./middleware/mongoSanitize"
 
 require("dotenv").config()
 
 const app: Express = express()
+
+// Needed when running behind a reverse proxy (typical in production hosting)
+// so req.ip reflects the real client IP via X-Forwarded-For.
+app.set("trust proxy", 1)
 
 const PORT: string | number = process.env.PORT || 4000
 
@@ -48,8 +54,16 @@ app.use(bodyParser.json())
 // Middleware to parse URL-encoded form data
 app.use(express.urlencoded({ extended: true }))
 
+// Basic NoSQL-injection hardening: strips $-operators and dotted keys.
+app.use(mongoSanitize())
+
 // API routes first
-app.use("/api", routes)
+const apiLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 300,
+})
+
+app.use("/api", apiLimiter, routes)
 
 // Serve static files from the React frontend with explicit options
 app.use(
@@ -102,6 +116,10 @@ const uri: string = `mongodb+srv://${encodeURIComponent(
 // )
 
 const options = { useNewUrlParser: true, useUnifiedTopology: true }
+
+// Mongoose-side hardening for filters.
+mongoose.set("strictQuery", true)
+mongoose.set("sanitizeFilter", true)
 
 mongoose
   .connect(uri)

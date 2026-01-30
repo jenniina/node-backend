@@ -21,6 +21,19 @@ import Key from "../../models/key"
 const dotenv = require("dotenv")
 dotenv.config()
 
+const getJwtSecret = (): Secret => {
+  const secret = process.env.JWT_SECRET
+  if (secret) return secret
+
+  // Never allow a predictable fallback secret in production.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is not set")
+  }
+
+  // Dev fallback (set JWT_SECRET in your .env to override).
+  return "dev-insecure-jwt-secret"
+}
+
 enum EError {
   en = "An error occurred",
   es = "Ha ocurrido un error",
@@ -303,7 +316,7 @@ const generateSessionToken = async (
 ): Promise<string | undefined> => {
   if (!userId) return undefined
 
-  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = getJwtSecret()
   const options = { expiresIn: "2d" }
   const safeTokenVersion = tokenVersion ?? 0
 
@@ -335,7 +348,7 @@ const generateToken = async (
 ): Promise<string | undefined> => {
   if (!id) return undefined
 
-  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = getJwtSecret()
   const options = { expiresIn: "1d" }
   try {
     const token = (await new Promise<string | undefined>((resolve, reject) => {
@@ -356,7 +369,7 @@ const generateToken = async (
 }
 
 const verifyToken = (token: string) => {
-  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = getJwtSecret()
 
   return jwt.verify(token, secret) as ITokenPayload
 }
@@ -373,7 +386,7 @@ const generateUsernameChangeResetToken = async (payload: {
   oldUsername: string
   newUsername: string
 }): Promise<string | undefined> => {
-  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = getJwtSecret()
   const options = { expiresIn: "2d" }
 
   try {
@@ -408,12 +421,32 @@ const generateUsernameChangeResetToken = async (payload: {
 const verifyUsernameChangeResetToken = (
   token: string
 ): UsernameChangeResetTokenPayload => {
-  const secret: Secret = process.env.JWT_SECRET ?? "sfj0ker8GJ3RT3s5djdf23"
+  const secret: Secret = getJwtSecret()
   const decoded = jwt.verify(token, secret) as UsernameChangeResetTokenPayload
   if (!decoded || decoded.purpose !== "username_change_undo") {
     throw new Error("Invalid token purpose")
   }
   return decoded
+}
+
+const getAuthenticatedUserFromRequest = async (
+  req: Request
+): Promise<IUser | null> => {
+  const existing = (req.body?.user as IUser | undefined) ?? undefined
+  if (existing) return existing
+
+  const token = req.headers.authorization?.split(" ")[1]
+  if (!token) return null
+
+  const decoded = verifyToken(token)
+  const user = await User.findById(decoded?.userId)
+  if (!user) return null
+
+  const decodedTokenVersion = decoded.tokenVersion ?? 0
+  const currentTokenVersion = user.tokenVersion ?? 0
+  if (decodedTokenVersion !== currentTokenVersion) return null
+
+  return user
 }
 
 const authenticateUser = async (
@@ -448,13 +481,10 @@ const authenticateUser = async (
   } catch (error) {
     //throw new Error((error as Error).message)
     console.error("Error:", error)
-    res
-      .status(401)
-      .json({
-        success: false,
-        message:
-          EAuthenticationFailed[(req.body.language as ELanguage) ?? "en"],
-      })
+    res.status(401).json({
+      success: false,
+      message: EAuthenticationFailed[(req.body.language as ELanguage) ?? "en"],
+    })
   }
 }
 
@@ -497,19 +527,25 @@ const checkIfAdmin = async (
   res: Response,
   next: NextFunction
 ) => {
-  const { language } = req.params
-  const { userID } = req.query
-  //find user
-  const user = await User.findById(userID)
-  if (user && user.role > 2) {
-    // User is an admin, allow access
-    next()
-  } else {
-    // User is not an admin, deny access
+  const language =
+    (req.params.language as ELanguage) ??
+    (req.body.language as ELanguage) ??
+    "en"
+  try {
+    const user = await getAuthenticatedUserFromRequest(req)
+    if (user && user.role > 2) {
+      next()
+      return
+    }
     res.status(403).json({
       message:
-        EAccessDeniedAdminPrivilegeRequired[language as ELanguage] ??
+        EAccessDeniedAdminPrivilegeRequired[language] ??
         "Access denied. Admin privilege required.",
+    })
+  } catch (error) {
+    console.error("Error:", error)
+    res.status(401).json({
+      message: EAuthenticationFailed[language] ?? "Authentication failed",
     })
   }
 }
@@ -519,44 +555,35 @@ const checkIfManagement = async (
   res: Response,
   next: NextFunction
 ) => {
-  const { language } = req.params
-  const { userID } = req.query
-  //find user
-  const user = await User.findById(userID)
-  if (user && user.role > 1) {
-    // User is an manager, allow access
-    next()
-  } else {
-    // User is not an manager, deny access
+  const language =
+    (req.params.language as ELanguage) ??
+    (req.body.language as ELanguage) ??
+    "en"
+  try {
+    const user = await getAuthenticatedUserFromRequest(req)
+    if (user && user.role > 1) {
+      next()
+      return
+    }
     res.status(403).json({
       message:
-        EAccessDeniedManagementPrivilegeRequired[language as ELanguage] ??
+        EAccessDeniedManagementPrivilegeRequired[language] ??
         "Access denied. Management privilege required.",
+    })
+  } catch (error) {
+    console.error("Error:", error)
+    res.status(401).json({
+      message: EAuthenticationFailed[language] ?? "Authentication failed",
     })
   }
 }
 
 const getUsers = async (req: Request, res: Response): Promise<void> => {
   try {
-    const storedKeyDoc = await Key.findOne()
-    if (!storedKeyDoc) {
-      res.status(500).json({ success: false, message: "No key found" })
-    }
-
-    const storedKey = storedKeyDoc.key
-
-    const envKey = process.env.KEY
-
-    if (envKey) {
-      const isMatch = await bcrypt.compare(envKey, storedKey)
-
-      if (isMatch === false) {
-        res.status(401).json({ success: false, message: "Unauthorized" })
-      }
-
-      const users: IUser[] = await User.find()
-      res.status(200).json(users)
-    } else res.status(500).json({ success: false, message: "No env key found" })
+    const users = (await User.find().select(
+      "_id name username language role verified blacklistedJokes"
+    )) as unknown as IUser[]
+    res.status(200).json(users)
   } catch (error) {
     console.error("Error:", error)
     res.status(500).json({
@@ -568,7 +595,9 @@ const getUsers = async (req: Request, res: Response): Promise<void> => {
 
 const getUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user: IUser | null = await User.findById(req.params.id)
+    const user = (await User.findById(req.params.id).select(
+      "_id name username language role verified blacklistedJokes"
+    )) as unknown as IUser | null
     res.status(200).json(user)
   } catch (error) {
     console.error("Error:", error)
@@ -1090,7 +1119,21 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
 
     const { password, _id, name } = body
 
-    const user = await User.findById(_id)
+    const authUser = req.body?.user as IUser | undefined
+    const targetUserId = (req.params.id as string | undefined) ?? _id
+    if (
+      authUser &&
+      targetUserId &&
+      String(authUser._id) !== String(targetUserId)
+    ) {
+      res.status(403).json({
+        success: false,
+        message: EForbidden[(req.body.language as ELanguage) ?? "en"],
+      })
+      return
+    }
+
+    const user = await User.findById(targetUserId)
 
     if (user) {
       if (name) {
@@ -1201,7 +1244,9 @@ const comparePassword = async (
   }
   try {
     const { _id, passwordOld, language } = req.body
-    const user: IUser | null = await User.findById(_id)
+    const authUser = req.body?.user as IUser | undefined
+    const targetUserId = (authUser?._id as unknown as string | undefined) ?? _id
+    const user: IUser | null = await User.findById(targetUserId)
 
     // if (!user) {
     //   res.status(404).json({ success: false, message: 'User not found ~' })
@@ -2415,6 +2460,26 @@ const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id, deleteJokes } = req.params
 
+    const authUser = req.body?.user as IUser | undefined
+    if (!authUser) {
+      res.status(401).json({
+        success: false,
+        message:
+          EAuthenticationFailed[(req.body?.language as ELanguage) ?? "en"],
+      })
+      return
+    }
+
+    const isSelf = String(authUser._id) === String(id)
+    const isAdmin = (authUser.role ?? 0) > 2
+    if (!isSelf && !isAdmin) {
+      res.status(403).json({
+        success: false,
+        message: EForbidden[(req.body?.language as ELanguage) ?? "en"],
+      })
+      return
+    }
+
     await Todo.deleteMany({ user: id })
 
     await Quiz.deleteMany({ user: id })
@@ -2451,6 +2516,16 @@ const addToBlacklistedJokes = async (
   try {
     const { id, jokeId, language } = req.params
     const { value } = req.body
+
+    const authUser = req.body?.user as IUser | undefined
+    if (!authUser || String(authUser._id) !== String(id)) {
+      res.status(403).json({
+        success: false,
+        message: EForbidden[(language as unknown as ELanguage) ?? "en"],
+      })
+      return
+    }
+
     let user
     if (value) {
       user = await User.findOneAndUpdate(
@@ -2492,6 +2567,16 @@ const removeJokeFromBlacklisted = async (
 ): Promise<void> => {
   try {
     const { id, joke_id, language } = req.params
+
+    const authUser = req.body?.user as IUser | undefined
+    if (!authUser || String(authUser._id) !== String(id)) {
+      res.status(403).json({
+        success: false,
+        message: EForbidden[(language as unknown as ELanguage) ?? "en"],
+      })
+      return
+    }
+
     const user = await User.findOneAndUpdate(
       { _id: id },
       { $pull: { blacklistedJokes: { _id: joke_id } } },
