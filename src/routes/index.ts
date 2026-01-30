@@ -150,12 +150,11 @@ router.post("/users/forgot", forgotPasswordLimiter, forgotPassword)
 router.get("/users/reset/:token", resetPassword)
 router.post("/users/reset/:token", resetPasswordLimiter, resetPasswordToken)
 router.get("/users/reset-username/:token", resetUsernameChange)
-//router.get('/users', [authenticateUser, checkIfAdmin, getUsers])
-router.get("/users", getUsers)
-router.get("/users/:id", getUser)
+router.get("/users", [authenticateUser, checkIfAdmin], getUsers)
+router.get("/users/:id", [authenticateUser], getUser)
 //router.post('/users', addUser)
-router.put("/users/:id", [comparePassword, updateUser])
-router.put("/users/", [comparePassword, updateUsername])
+router.put("/users/:id", [authenticateUser, comparePassword, updateUser])
+router.put("/users/", [authenticateUser, comparePassword, updateUsername])
 router.get("/users/:username/confirm-email/:token", confirmEmail)
 router.delete("/users/:id/:deleteJokes", [authenticateUser, deleteUser])
 router.post("/users/register", registerLimiter, registerUser)
@@ -170,8 +169,16 @@ router.post(
   revokeUserSessions
 )
 // router.post('/users/:id/delete', deleteAllJokesByUserId)
-router.put("/users/:id/:jokeId/:language", addToBlacklistedJokes)
-router.delete("/users/:id/:joke_id/:language", removeJokeFromBlacklisted)
+router.put(
+  "/users/:id/:jokeId/:language",
+  [authenticateUser],
+  addToBlacklistedJokes
+)
+router.delete(
+  "/users/:id/:joke_id/:language",
+  [authenticateUser],
+  removeJokeFromBlacklisted
+)
 
 // router.get('/users/:username/jokes', getJokesByUsername)
 router.get("/users/:id/categories/:category/jokes", getJokesByUserAndCategory)
@@ -240,9 +247,18 @@ router.post(
   orderConfirmation
 )
 router.get("/cart/:language/:orderID", getOrderByOrderID)
-router.get("/cart/:language", [checkIfManagement, getAllOrders])
-router.delete("/cart/:language/:orderID", [checkIfAdmin, deleteOrder])
+router.get("/cart/:language", [
+  authenticateUser,
+  checkIfManagement,
+  getAllOrders,
+])
+router.delete("/cart/:language/:orderID", [
+  authenticateUser,
+  checkIfAdmin,
+  deleteOrder,
+])
 router.put("/cart/:language/:orderID", [
+  authenticateUser,
   checkIfAdmin,
   updateOrder,
   orderChangeConfirmation,

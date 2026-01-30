@@ -5,6 +5,7 @@ import bodyParser from "body-parser"
 import * as path from "path"
 import routes from "./routes"
 import { rateLimit } from "./middleware/rateLimit"
+import { mongoSanitize } from "./middleware/mongoSanitize"
 
 require("dotenv").config()
 
@@ -52,6 +53,9 @@ app.use(express.json())
 app.use(bodyParser.json())
 // Middleware to parse URL-encoded form data
 app.use(express.urlencoded({ extended: true }))
+
+// Basic NoSQL-injection hardening: strips $-operators and dotted keys.
+app.use(mongoSanitize())
 
 // API routes first
 const apiLimiter = rateLimit({
@@ -112,6 +116,10 @@ const uri: string = `mongodb+srv://${encodeURIComponent(
 // )
 
 const options = { useNewUrlParser: true, useUnifiedTopology: true }
+
+// Mongoose-side hardening for filters.
+mongoose.set("strictQuery", true)
+mongoose.set("sanitizeFilter", true)
 
 mongoose
   .connect(uri)
