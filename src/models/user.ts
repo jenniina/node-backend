@@ -1,5 +1,5 @@
-import { IUser } from "../types"
-import { model, Schema } from "mongoose"
+import { IUser } from '../types'
+import { model, Schema } from 'mongoose'
 
 const userSchema: Schema = new Schema(
   {
@@ -71,8 +71,29 @@ const userSchema: Schema = new Schema(
         },
       },
     ],
+
+    // Per-user storage for the WCAG Color Accessibility tool
+    colorAccessibility: {
+      colors: {
+        type: [Schema.Types.Mixed],
+        required: false,
+        default: [],
+      },
+      currentColor: {
+        type: String,
+        required: false,
+      },
+      mode: {
+        type: String,
+        required: false,
+      },
+      updatedAt: {
+        type: Date,
+        required: false,
+      },
+    },
   },
   { timestamps: true }
 )
 
-export const User = model<IUser>("User", userSchema)
+export const User = model<IUser>('User', userSchema)
