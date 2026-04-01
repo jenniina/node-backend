@@ -645,7 +645,7 @@ const getPublicUserNamesByIds = async (
       return
     }
 
-    const users = (await User.find({ _id: { $in: ids } })
+    const users = (await User.find({ _id: ids })
       .select('_id name')
       .lean()) as unknown as TPublicUserName[]
 
@@ -657,7 +657,9 @@ const getPublicUserNamesByIds = async (
     console.error('Error:', error)
     res.status(500).json({
       success: false,
-      message: EError[(req.body?.language as ELanguage) ?? 'en'],
+      message:
+        (error as Error).message ??
+        EError[(req.body?.language as ELanguage) ?? 'en'],
     })
   }
 }
