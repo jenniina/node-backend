@@ -1,6 +1,6 @@
 # A Node.js Application for a React Frontend
 
-This is a Node.js application serving a React frontend. The app includes various features such as user authentication, quiz management, todo management, joke management, and more. It provides a RESTful API for the frontend to interact with. The app was deployed as an Azure container app, but has now been moved to a hosting service. The frontend is deployed as a static web app on Azure. The app uses a MongoDB database to store data.
+This is a Node.js application serving a [React frontend](https://github.com/jenniina/react-sub-site). The app includes various features such as user authentication, quiz management, todo management, joke management, and more. It provides a RESTful API for the frontend to interact with. The app uses a MongoDB database to store data.
 
 ## Features
 
