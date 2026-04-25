@@ -1,3 +1,4 @@
+import { create } from 'domain'
 import { model, Schema } from 'mongoose'
 
 const BlobSchema: Schema = new Schema({
@@ -15,6 +16,7 @@ const BlobSchema: Schema = new Schema({
 const BlobsSchema: Schema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   d: { type: Number, required: true },
+  variant: { type: Number },
   draggables: [BlobSchema],
   backgroundColor: {
     type: [String],
@@ -25,6 +27,8 @@ const BlobsSchema: Schema = new Schema({
     },
   },
   versionName: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 })
 
 function arrayLimit(val: string[]) {
