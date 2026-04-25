@@ -1,51 +1,51 @@
-import e, { Response, Request } from "express"
+import e, { Response, Request } from 'express'
 import {
   IJoke,
   EJokeType,
   EEmailSentToAdministratorPleaseWaitForApproval,
   EJokeUpdated,
   EUserDeletedFromJoke,
-} from "../../types"
-import { Joke } from "../../models/joke"
-import { sendMail, EEmailSent, EErrorSendingMail } from "../email"
-import { User } from "../../models/user"
+} from '../../types'
+import { Joke } from '../../models/joke'
+import { sendMail, EEmailSent, EErrorSendingMail } from '../email'
+import { User } from '../../models/user'
 
 enum ELanguage {
-  en = "en",
-  es = "es",
-  fr = "fr",
-  de = "de",
-  pt = "pt",
-  cs = "cs",
-  fi = "fi",
+  en = 'en',
+  es = 'es',
+  fr = 'fr',
+  de = 'de',
+  pt = 'pt',
+  cs = 'cs',
+  fi = 'fi',
 }
 enum EError {
-  en = "An error occurred",
-  es = "Ha ocurrido un error",
-  fr = "Une erreur est survenue",
-  de = "Ein Fehler ist aufgetreten",
-  pt = "Ocorreu um erro",
-  cs = "Došlo k chybě",
-  fi = "Tapahtui virhe",
+  en = 'An error occurred',
+  es = 'Ha ocurrido un error',
+  fr = 'Une erreur est survenue',
+  de = 'Ein Fehler ist aufgetreten',
+  pt = 'Ocorreu um erro',
+  cs = 'Došlo k chybě',
+  fi = 'Tapahtui virhe',
 }
 
 enum EAnErrorOccurredAddingTheJoke {
-  en = "An error occurred adding the joke",
-  es = "Ha ocurrido un error al agregar la broma",
+  en = 'An error occurred adding the joke',
+  es = 'Ha ocurrido un error al agregar la broma',
   fr = "Une erreur s'est produite lors de l'ajout de la blague",
-  de = "Beim Hinzufügen des Witzes ist ein Fehler aufgetreten",
-  pt = "Ocorreu um erro ao adicionar a piada",
-  cs = "Při přidávání vtipu došlo k chybě",
-  fi = "Vitsiä lisättäessä tapahtui virhe",
+  de = 'Beim Hinzufügen des Witzes ist ein Fehler aufgetreten',
+  pt = 'Ocorreu um erro ao adicionar a piada',
+  cs = 'Při přidávání vtipu došlo k chybě',
+  fi = 'Vitsiä lisättäessä tapahtui virhe',
 }
 enum EJokeAdded {
-  en = "Joke added",
-  es = "Broma agregada",
-  fr = "Blague ajoutée",
-  de = "Witz hinzugefügt",
-  pt = "Piada adicionada",
-  cs = "Vtip přidán",
-  fi = "Vitsi lisätty",
+  en = 'Joke added',
+  es = 'Broma agregada',
+  fr = 'Blague ajoutée',
+  de = 'Witz hinzugefügt',
+  pt = 'Piada adicionada',
+  cs = 'Vtip přidán',
+  fi = 'Vitsi lisätty',
 }
 
 const getJokes = async (req: Request, res: Response): Promise<void> => {
@@ -55,10 +55,10 @@ const getJokes = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "An error occurred",
+      message: 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -89,18 +89,18 @@ const addJoke = async (req: Request, res: Response): Promise<void> => {
   try {
     const body = req.body as Pick<
       IJoke,
-      | "jokeId"
-      | "type"
-      | "category"
-      | "subCategories"
-      | "user"
-      | "language"
-      | "safe"
-      | "flags"
-      | "private"
-      | "verified"
-      | "anonymous"
-      | "author"
+      | 'jokeId'
+      | 'type'
+      | 'category'
+      | 'subCategories'
+      | 'user'
+      | 'language'
+      | 'safe'
+      | 'flags'
+      | 'private'
+      | 'verified'
+      | 'anonymous'
+      | 'author'
     >
 
     // let joke: IJoke
@@ -203,7 +203,7 @@ const addJoke = async (req: Request, res: Response): Promise<void> => {
     //Object.values(joke.flags).some(Boolean)
     if (joke.private === false) {
       const author = await User.findOne({ _id: req.body.author })
-      const subject = "A joke needs verification"
+      const subject = 'A joke needs verification'
       const message = ` ${author?.username}: ${author?.name}: ${joke.user}, ${
         joke._id
       }, ${joke.type}, ${joke.category}, ${joke.language}, ${
@@ -211,14 +211,14 @@ const addJoke = async (req: Request, res: Response): Promise<void> => {
       }, ${Object.entries(joke.flags)
         .filter(([key, value]) => value)
         .map(([key, value]) => key)
-        .join(", ")}, ${
-        joke.type === EJokeType.twopart && joke.setup ? joke.setup : ""
+        .join(', ')}, ${
+        joke.type === EJokeType.twopart && joke.setup ? joke.setup : ''
       }, ${
-        joke.type === EJokeType.twopart && joke.delivery ? joke.delivery : ""
-      }, ${joke.type === EJokeType.single && joke.joke ? joke.joke : ""}`
-      const adminEmail = process.env.NODEMAILER_USER || ""
+        joke.type === EJokeType.twopart && joke.delivery ? joke.delivery : ''
+      }, ${joke.type === EJokeType.single && joke.joke ? joke.joke : ''}`
+      const adminEmail = process.env.NODEMAILER_USER || ''
       const link = `${process.env.BASE_URI}/api/jokes/${joke._id}/verification`
-      const language = (joke.language as ELanguage) ?? "en"
+      const language = (joke.language as ELanguage) ?? 'en'
 
       try {
         const mailResponse = await sendMail(subject, message, adminEmail, link)
@@ -304,12 +304,12 @@ const addJoke = async (req: Request, res: Response): Promise<void> => {
       })
     }
   } catch (error) {
-    console.error("Error:", error)
+    console.error('Error:', error)
     res.status(500).json({
       success: false,
       message:
         EAnErrorOccurredAddingTheJoke[req.body.language as ELanguage] ||
-        "An error occurred adding the joke",
+        'An error occurred adding the joke',
       error,
     })
   }
@@ -317,13 +317,13 @@ const addJoke = async (req: Request, res: Response): Promise<void> => {
 
 const verifyJoke = async (req: Request, res: Response): Promise<void> => {
   enum EYourJokeHasBeenVerified {
-    en = "Your joke has been verified",
-    es = "Tu broma ha sido verificada",
-    fr = "Votre blague a été vérifiée",
-    de = "Dein Witz wurde überprüft",
-    pt = "Sua piada foi verificada",
-    cs = "Váš vtip byl ověřen",
-    fi = "Vitsisi on vahvistettu",
+    en = 'Your joke has been verified',
+    es = 'Tu broma ha sido verificada',
+    fr = 'Votre blague a été vérifiée',
+    de = 'Dein Witz wurde überprüft',
+    pt = 'Sua piada foi verificada',
+    cs = 'Váš vtip byl ověřen',
+    fi = 'Vitsisi on vahvistettu',
   }
   try {
     const joke: IJoke | null = await Joke.findOneAndUpdate(
@@ -332,13 +332,13 @@ const verifyJoke = async (req: Request, res: Response): Promise<void> => {
     )
     const subject = EYourJokeHasBeenVerified[joke?.language as ELanguage]
     const message = `${joke?.category}, ${
-      joke?.type === EJokeType.twopart ? `${joke?.setup} ${joke?.delivery}` : ""
-    } - ${joke?.type === EJokeType.single ? joke?.joke : ""}`
-    const author = joke?.author || ""
+      joke?.type === EJokeType.twopart ? `${joke?.setup} ${joke?.delivery}` : ''
+    } - ${joke?.type === EJokeType.single ? joke?.joke : ''}`
+    const author = joke?.author || ''
     const recipient = await User.findOne({ _id: author })
-    const username = recipient?.username || ""
-    const link = `${process.env.SITE_URL}/portfolio/jokes?login=login`
-    const language = (joke?.language as ELanguage) ?? "en"
+    const username = recipient?.username || ''
+    const link = `${process.env.SITE_URL}/portfolio/jokes?login=true`
+    const language = (joke?.language as ELanguage) ?? 'en'
     sendMail(subject, message, username, link)
       .then((response) => {
         console.log(EEmailSent[joke?.language as ELanguage], response)
@@ -367,7 +367,7 @@ const verifyJoke = async (req: Request, res: Response): Promise<void> => {
       }`,
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -402,7 +402,7 @@ const updateJoke = async (req: Request, res: Response): Promise<void> => {
       //     console.error(EErrorSendingMail[body.language as ELanguage], error)
       //   )
       const author = await User.findOne({ _id: req.body.author })
-      const subject = "A joke needs verification"
+      const subject = 'A joke needs verification'
       const message = `${author?.username}: ${author?.name}: ${body.user}, ${
         body.jokeId
       }, ${findJoke._id}, ${body.type}, ${body.category}, ${body.language}, ${
@@ -410,12 +410,12 @@ const updateJoke = async (req: Request, res: Response): Promise<void> => {
       }, ${Object.entries(body.flags)
         .filter(([key, value]) => value)
         .map(([key, value]) => key)
-        .join(", ")}, ${
-        body.type === EJokeType.twopart && body.setup ? body.setup : ""
+        .join(', ')}, ${
+        body.type === EJokeType.twopart && body.setup ? body.setup : ''
       }, ${
-        body.type === EJokeType.twopart && body.delivery ? body.delivery : ""
-      }, ${body.type === EJokeType.single && body.body ? body.body : ""}`
-      const adminEmail = process.env.NODEMAILER_USER || ""
+        body.type === EJokeType.twopart && body.delivery ? body.delivery : ''
+      }, ${body.type === EJokeType.single && body.body ? body.body : ''}`
+      const adminEmail = process.env.NODEMAILER_USER || ''
       const link = `${process.env.BASE_URI}/api/jokes/${findJoke._id}/verification`
 
       // sendMail(subject, message, adminEmail, language, link)
@@ -476,10 +476,10 @@ const updateJoke = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.language as ELanguage] || "An error occurred",
+      message: EError[req.params.language as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -505,16 +505,16 @@ const deleteUserFromJoke = async (
 
     res.status(200).json({
       success: true,
-      message: EUserDeletedFromJoke[(joke?.language as ELanguage) ?? "en"],
+      message: EUserDeletedFromJoke[(joke?.language as ELanguage) ?? 'en'],
       joke,
     })
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.lang as ELanguage] || "An error occurred",
+      message: EError[req.params.lang as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -557,10 +557,10 @@ const findJokeByJokeIdLanguageCategoryType = async (
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.language as ELanguage] || "An error occurred",
+      message: EError[req.params.language as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -596,10 +596,10 @@ const getJokesByUserAndCategory = async (
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.language as ELanguage] || "An error occurred",
+      message: EError[req.params.language as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -616,10 +616,10 @@ const getJokesByUserAndType = async (
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.language as ELanguage] || "An error occurred",
+      message: EError[req.params.language as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
@@ -636,10 +636,10 @@ const getJokesByUserAndSafe = async (
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: EError[req.params.language as ELanguage] || "An error occurred",
+      message: EError[req.params.language as ELanguage] || 'An error occurred',
       error,
     })
-    console.error("Error:", error)
+    console.error('Error:', error)
   }
 }
 
