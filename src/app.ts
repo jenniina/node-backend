@@ -1,23 +1,24 @@
-import express, { Express, Request, Response } from "express"
-import mongoose from "mongoose"
-import cors from "cors"
-import bodyParser from "body-parser"
-import * as path from "path"
-import routes from "./routes"
-import { rateLimit } from "./middleware/rateLimit"
-import { mongoSanitize } from "./middleware/mongoSanitize"
+import express, { Express, Request, Response } from 'express'
+import mongoose from 'mongoose'
+import cors from 'cors'
+import bodyParser from 'body-parser'
+import * as path from 'path'
+import routes from './routes'
+import { rateLimit } from './middleware/rateLimit'
+import { mongoSanitize } from './middleware/mongoSanitize'
 
-require("dotenv").config()
+require('dotenv').config()
 
 const app: Express = express()
+app.set('etag', false)
 
 // Needed when running behind a reverse proxy (typical in production hosting)
 // so req.ip reflects the real client IP via X-Forwarded-For.
-app.set("trust proxy", 1)
+app.set('trust proxy', 1)
 
 const PORT: string | number = process.env.PORT || 4000
 
-const allowedOrigin = process.env.CORS_ORIGIN ?? "https://react.jenniina.fi"
+const allowedOrigin = process.env.CORS_ORIGIN ?? 'https://react.jenniina.fi'
 
 // // Debug environment variables (commented in production)
 // console.log("Environment check:")
@@ -37,16 +38,15 @@ const allowedOrigin = process.env.CORS_ORIGIN ?? "https://react.jenniina.fi"
 app.use(
   cors({
     origin: allowedOrigin,
-    methods: ["GET", "HEAD", "OPTIONS", "POST", "PUT", "DELETE"],
+    methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-      "x-api-key",
+      'Origin',
+      'X-Requested-With',
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'x-api-key',
     ],
-    exposedHeaders: ["Content-Type"],
   })
 )
 app.use(express.json())
@@ -57,53 +57,68 @@ app.use(express.urlencoded({ extended: true }))
 // Basic NoSQL-injection hardening: strips $-operators and dotted keys.
 app.use(mongoSanitize())
 
+app.use('/api', (req: Request, res: Response, next) => {
+  delete req.headers['if-none-match']
+  delete req.headers['if-modified-since']
+  res.setHeader(
+    'Cache-Control',
+    'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+  )
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+  res.setHeader('Surrogate-Control', 'no-store')
+  res.removeHeader('ETag')
+  res.removeHeader('Last-Modified')
+  next()
+})
+
 // API routes first
 const apiLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 300,
 })
 
-app.use("/api", apiLimiter, routes)
+app.use('/api', apiLimiter, routes)
 
 // Serve static files from the React frontend with explicit options
 app.use(
-  express.static(path.join(__dirname, "frontend", "client"), {
-    maxAge: "1d",
+  express.static(path.join(__dirname, 'frontend', 'client'), {
+    maxAge: '1d',
     setHeaders: (res, path) => {
-      if (path.endsWith(".js")) {
-        res.setHeader("Content-Type", "application/javascript")
-      } else if (path.endsWith(".css")) {
-        res.setHeader("Content-Type", "text/css")
+      if (path.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript')
+      } else if (path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css')
       }
     },
   })
 )
 
 // Health check endpoint
-app.get("/health", (req: Request, res: Response) => {
-  res.status(200).json({ status: "OK" })
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({ status: 'OK' })
 })
 
 // Catch-all handler: send back React's index.html file for client-side routing
 // This should only catch routes that don't exist as files
 app.use((req: Request, res: Response, next) => {
   // Skip if it's an API route
-  if (req.path.startsWith("/api/")) {
+  if (req.path.startsWith('/api/')) {
     return next()
   }
 
   // Skip if it looks like a file (has extension)
-  if (req.path.includes(".") && !req.path.endsWith("/")) {
-    return res.status(404).send("File not found")
+  if (req.path.includes('.') && !req.path.endsWith('/')) {
+    return res.status(404).send('File not found')
   }
 
   // Serve index.html for SPA routes
-  res.sendFile(path.join(__dirname, "frontend", "client", "index.html"))
+  res.sendFile(path.join(__dirname, 'frontend', 'client', 'index.html'))
 })
 
 const uri: string = `mongodb+srv://${encodeURIComponent(
-  process.env.MONGO_USER || ""
-)}:${encodeURIComponent(process.env.MONGO_PASSWORD || "")}@${
+  process.env.MONGO_USER || ''
+)}:${encodeURIComponent(process.env.MONGO_PASSWORD || '')}@${
   process.env.MONGO_CLUSTER
 }.zzpvtsc.mongodb.net/${process.env.MONGO_DB}?retryWrites=true&w=majority`
 
@@ -118,23 +133,26 @@ const uri: string = `mongodb+srv://${encodeURIComponent(
 const options = { useNewUrlParser: true, useUnifiedTopology: true }
 
 // Mongoose-side hardening for filters.
-mongoose.set("strictQuery", true)
-mongoose.set("sanitizeFilter", true)
+mongoose.set('strictQuery', true)
+mongoose.set('sanitizeFilter', true)
 
 mongoose
   .connect(uri)
   .then(() => {
-    console.log("MongoDB connected successfully")
+    console.log('MongoDB connected successfully')
+
     app.listen(PORT, () =>
       console.log(`Server running on http://localhost:${PORT}`)
     )
   })
   .catch((error) => {
-    console.error("MongoDB connection error:", error.message)
-    console.error("Full error:", error)
+    console.error('MongoDB connection error:', error.message)
+    console.error('Full error:', error)
     // Don't crash the server, just log the error
-    console.error("Starting server without database connection...")
+    console.error('Starting server without database connection...')
+    console.log('Mongo DB:', process.env.MONGO_DB)
+
     app.listen(PORT, () =>
-      console.log(`Server running on http://localhost:${PORT} (NO DATABASE)`)
+      console.log(`Server running on http://localhost:${PORT}`)
     )
   })
