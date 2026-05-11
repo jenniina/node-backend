@@ -180,6 +180,15 @@ enum EInvalidCredentials {
   cs = 'Neplatné přihlašovací údaje',
   fi = 'Virheelliset tunnistetiedot',
 }
+enum EPleaseChooseANewPassword {
+  en = 'Please choose a new password',
+  es = 'Por favor, elige una nueva contraseña',
+  fr = 'Veuillez choisir un nouveau mot de passe',
+  de = 'Bitte wählen Sie ein neues Passwort',
+  pt = 'Por favor, escolha uma nova senha',
+  cs = 'Vyberte prosím nové heslo',
+  fi = 'Valitse uusi salasana',
+}
 enum EForbidden {
   en = 'Forbidden',
   es = 'Prohibido',
@@ -1209,11 +1218,21 @@ const updateUser = async (req: Request, res: Response): Promise<void> => {
       if (password) {
         const isMatch = await bcrypt.compare(password, user.password)
         if (isMatch) {
-          const salt = await bcrypt.genSalt(10)
-          const hashedPassword = await bcrypt.hash(password, salt)
-          user.password = hashedPassword
-          user.markModified('password')
+          res.status(400).json({
+            success: false,
+            message:
+              EPleaseChooseANewPassword[
+                (req.body.language as ELanguage) ?? 'en'
+              ],
+          })
+          return
         }
+
+        const salt = await bcrypt.genSalt(10)
+        const hashedPassword = await bcrypt.hash(password, salt)
+        user.password = hashedPassword
+        user.markModified('password')
+
         user.set('language', body.language)
         const updatedUser = await user.save()
         res.status(200).json({
