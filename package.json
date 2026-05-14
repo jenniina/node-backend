@@ -2,9 +2,10 @@
   "name": "backend",
   "version": "1.0.1",
   "description": "",
-  "main": "src/app.ts",
+  "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
+    "build:flat-deploy": "npm run build && node scripts/prepare-flat-deploy.js",
     "dev": "concurrently \"tsc -w\" \"nodemon dist/app.js\"",
     "start": "node dist/app.js"
   },
