@@ -2,6 +2,12 @@ import { Request, Response } from 'express'
 import { request as httpRequest, RequestOptions, Agent } from 'https'
 
 const getPixabayApiKey = () => process.env.PIXABAY_API_KEY
+const pixabayAgent = new Agent({
+  keepAlive: true,
+  maxSockets: 20,
+  maxFreeSockets: 10,
+  timeout: 15000,
+})
 
 export const searchImages = async (req: Request, res: Response) => {
   const pixabayApiKey = getPixabayApiKey()
@@ -91,12 +97,10 @@ export const searchImages = async (req: Request, res: Response) => {
     } - URL: ${url}`
   )
 
-  const agent = new Agent({ keepAlive: true })
-
   const options: RequestOptions = {
     method: 'GET',
     timeout: 10000,
-    agent,
+    agent: pixabayAgent,
   }
 
   const MAX_RETRIES = 3

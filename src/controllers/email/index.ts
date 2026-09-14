@@ -59,42 +59,102 @@ export enum EPleaseProvideAValidEmailAddress {
 
 const { validationResult } = require('express-validator')
 const sanitizeHtml = require('sanitize-html')
-const nodemailer = require('nodemailer')
 
-const transporter = nodemailer.createTransport({
-  host: process.env.NODEMAILER_HOST,
-  port: process.env.NODEMAILER_PORT,
-  auth: {
-    user: process.env.NODEMAILER_USER,
-    pass: process.env.NODEMAILER_PASSWORD,
-  },
-})
+type MailErrorShape = {
+  code?: string
+  command?: string
+  response?: string
+  responseCode?: number
+}
+
+const extractMailErrorDetail = (error: unknown): string => {
+  if (error instanceof Error) {
+    const mailError = error as Error & MailErrorShape
+    const details = [
+      mailError.message,
+      mailError.code ? `code=${mailError.code}` : '',
+      mailError.command ? `command=${mailError.command}` : '',
+      mailError.responseCode ? `smtpStatus=${mailError.responseCode}` : '',
+      mailError.response ? `smtpResponse=${mailError.response}` : '',
+    ].filter(Boolean)
+
+    return details.join(' | ')
+  }
+
+  return 'Unknown email error'
+}
+
+const BREVO_API_KEY = process.env.BREVO_API_KEY || ''
+const BREVO_SENDER_EMAIL =
+  process.env.BREVO_SENDER_EMAIL || process.env.NODEMAILER_USER || ''
+const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Jenniina Laine'
+
+type BrevoRecipient = {
+  email: string
+  name?: string
+}
+
+type BrevoEmailPayload = {
+  sender: {
+    name: string
+    email: string
+  }
+  to: BrevoRecipient[]
+  subject: string
+  textContent: string
+}
+
+const getMissingMailConfig = (): string[] => {
+  const missing: string[] = []
+  if (!BREVO_API_KEY) missing.push('BREVO_API_KEY')
+  if (!BREVO_SENDER_EMAIL) missing.push('BREVO_SENDER_EMAIL or NODEMAILER_USER')
+  return missing
+}
+
+const sendBrevoEmail = async (payload: BrevoEmailPayload) => {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': BREVO_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    const responseText = await response.text()
+    throw new Error(
+      `Brevo API responded with status ${response.status} ${response.statusText} | response=${responseText}`
+    )
+  }
+
+  return response.json()
+}
+
 export const sendMail = (
   subject: string,
   message: string,
   username: IUser['username'] | undefined,
   link: string
 ) => {
-  return new Promise((resolve, reject) => {
-    transporter.sendMail(
-      {
-        from: process.env.NODEMAILER_USER,
-        to: username,
-        subject: subject,
-        text: `${message}\n\n ${link}`,
-      },
-      (error: Error, info: { response: unknown }) => {
-        if (error) {
-          console.error(error)
-          reject(error)
-          return error
-        } else {
-          // console.log('Email sent: ' + info.response)
-          resolve(info.response)
-          return info.response
-        }
-      }
+  const missingMailConfig = getMissingMailConfig()
+  if (missingMailConfig.length > 0) {
+    return Promise.reject(
+      new Error(
+        `Email service is not configured. Missing: ${missingMailConfig.join(', ')}`
+      )
     )
+  }
+
+  return sendBrevoEmail({
+    sender: {
+      name: BREVO_SENDER_NAME,
+      email: BREVO_SENDER_EMAIL,
+    },
+    to: [{ email: String(username || '') }],
+    subject,
+    textContent: `${message}\n\n${link}`,
   })
 }
 
@@ -105,25 +165,26 @@ export const sendEmailForm = async (req: Request, res: Response) => {
     return res.status(400).json({ errors: errors.array() })
   }
 
-  const sanitizedMessage = sanitizeHtml(req.body.message)
-  const sanitizedEncouragement = sanitizeHtml(req.body.encouragement)
-  const sanitizedClarification = sanitizeHtml(req.body.clarification)
+  const missingMailConfig = getMissingMailConfig()
+  if (missingMailConfig.length > 0) {
+    console.error(
+      `Cannot send form email. Missing mail config: ${missingMailConfig.join(', ')}`
+    )
+    return res.status(500).json({ error: 'Email service is not configured' })
+  }
+
+  const sanitizedMessage = sanitizeHtml(String(req.body.message || ''))
+  const sanitizedEncouragement = sanitizeHtml(
+    String(req.body.encouragement || '')
+  )
+  const sanitizedClarification = sanitizeHtml(
+    String(req.body.clarification || '')
+  )
   const { firstName, lastName, email } = req.body
 
-  let transporter = nodemailer.createTransport({
-    host: process.env.NODEMAILER_HOST,
-    port: process.env.NODEMAILER_PORT,
-    auth: {
-      user: process.env.NODEMAILER_USER,
-      pass: process.env.NODEMAILER_PASSWORD,
-    },
-  })
-
-  let mailOptions = {
-    from: process.env.NODEMAILER_USER,
-    to: process.env.NODEMAILER_USER,
+  const mailOptions = {
     subject: `Message from ${firstName} ${lastName}`,
-    text: `
+    textContent: `
     Subject: ${req.body.select}
     Message: ${sanitizedMessage}
     Encouragement: ${sanitizedEncouragement}
@@ -136,11 +197,20 @@ export const sendEmailForm = async (req: Request, res: Response) => {
   }
 
   try {
-    await transporter.sendMail(mailOptions)
+    await sendBrevoEmail({
+      sender: {
+        name: BREVO_SENDER_NAME,
+        email: BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: BREVO_SENDER_EMAIL }],
+      subject: mailOptions.subject,
+      textContent: mailOptions.textContent,
+    })
     res.status(200).send('Email sent')
   } catch (error) {
     console.error(error)
-    res.status(500).send('Error sending email')
+    const errorMessage = extractMailErrorDetail(error)
+    res.status(500).json({ error: 'Error sending email', detail: errorMessage })
   }
 }
 
@@ -151,24 +221,21 @@ export const sendEmailSelect = async (req: Request, res: Response) => {
     return res.status(400).json({ errors: errors.array() })
   }
 
-  const sanitizedMessage = sanitizeHtml(req.body.clarification)
-  const sanitizedEmail = sanitizeHtml(req.body.email)
+  const missingMailConfig = getMissingMailConfig()
+  if (missingMailConfig.length > 0) {
+    console.error(
+      `Cannot send select email. Missing mail config: ${missingMailConfig.join(', ')}`
+    )
+    return res.status(500).json({ error: 'Email service is not configured' })
+  }
+
+  const sanitizedMessage = sanitizeHtml(String(req.body.clarification || ''))
+  const sanitizedEmail = sanitizeHtml(String(req.body.email || ''))
   const { favoriteHero, issues } = req.body
 
-  let transporter = nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
-    port: 587,
-    auth: {
-      user: process.env.NODEMAILER_USER,
-      pass: process.env.NODEMAILER_PASSWORD,
-    },
-  })
-
-  let mailOptions = {
-    from: process.env.NODEMAILER_USER,
-    to: process.env.NODEMAILER_USER,
+  const mailOptions = {
     subject: `Message from React Custom Select Page`,
-    text: `
+    textContent: `
         Issues: ${issues}
         Favorite Hero Section: ${favoriteHero}
         Clarification: ${sanitizedMessage} 
@@ -177,11 +244,20 @@ export const sendEmailSelect = async (req: Request, res: Response) => {
   }
 
   try {
-    await transporter.sendMail(mailOptions)
+    await sendBrevoEmail({
+      sender: {
+        name: BREVO_SENDER_NAME,
+        email: BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: BREVO_SENDER_EMAIL }],
+      subject: mailOptions.subject,
+      textContent: mailOptions.textContent,
+    })
     res.status(200).send('Email sent')
   } catch (error) {
     console.error(error)
-    res.status(500).send('Error sending email')
+    const errorMessage = extractMailErrorDetail(error)
+    res.status(500).json({ error: 'Error sending email', detail: errorMessage })
   }
 }
 
@@ -191,33 +267,40 @@ export const sendVerificationLink = async (req: Request, res: Response) => {
     console.error(errors)
     return res.status(400).json({ errors: errors.array() })
   }
+
+  const missingMailConfig = getMissingMailConfig()
+  if (missingMailConfig.length > 0) {
+    console.error(
+      `Cannot send verification email. Missing mail config: ${missingMailConfig.join(', ')}`
+    )
+    return res.status(500).json({ error: 'Email service is not configured' })
+  }
+
   const { email } = req.body
   const token = generateToken(email)
 
-  let transporter = nodemailer.createTransport({
-    host: 'smtp-relay.brevo.com',
-    port: 587,
-    auth: {
-      user: process.env.NODEMAILER_USER,
-      pass: process.env.NODEMAILER_PASSWORD,
-    },
-  })
-
-  let mailOptions = {
-    from: process.env.NODEMAILER_USER,
-    to: email,
+  const mailOptions = {
     subject: `Verify your email address for jenniina.fi`,
-    text: `
+    textContent: `
             Click the link below to verify your email address.
             ${process.env.BASE_URI}/verify/${token}
         `,
   }
 
   try {
-    await transporter.sendMail(mailOptions)
+    await sendBrevoEmail({
+      sender: {
+        name: BREVO_SENDER_NAME,
+        email: BREVO_SENDER_EMAIL,
+      },
+      to: [{ email }],
+      subject: mailOptions.subject,
+      textContent: mailOptions.textContent,
+    })
     res.status(200).send('Email sent')
   } catch (error) {
     console.error(error)
-    res.status(500).send('Error sending email')
+    const errorMessage = extractMailErrorDetail(error)
+    res.status(500).json({ error: 'Error sending email', detail: errorMessage })
   }
 }

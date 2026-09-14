@@ -35,6 +35,11 @@ app.set('trust proxy', 1)
 
 const PORT: string | number = process.env.PORT || 4000
 const mongoDbName = process.env.MONGO_DB ?? 'unset'
+const mailHost = process.env.NODEMAILER_HOST ?? 'unset'
+const mailPort = process.env.NODEMAILER_PORT ?? 'unset'
+const mailConfigured = Boolean(
+  process.env.NODEMAILER_USER && process.env.NODEMAILER_PASSWORD
+)
 const mongoConfig = {
   user: process.env.MONGO_USER,
   password: process.env.MONGO_PASSWORD,
@@ -122,6 +127,9 @@ app.get('/api/health', (_req: Request, res: Response) => {
     mongoDb: mongoDbName,
     mongoState: mongoose.connection.readyState,
     mongoConfigured: hasMongoConfig,
+    mailConfigured,
+    mailHost,
+    mailPort,
   })
 })
 
@@ -155,6 +163,9 @@ app.get('/health', (req: Request, res: Response) => {
     mongoDb: mongoDbName,
     mongoState: mongoose.connection.readyState,
     mongoConfigured: hasMongoConfig,
+    mailConfigured,
+    mailHost,
+    mailPort,
   })
 })
 

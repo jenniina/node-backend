@@ -140,6 +140,18 @@ const tokenIssueLimiter = rateLimit({
   message: rateLimitMessage,
 })
 
+const contactFormLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: 'Too many contact form submissions, please try again later.',
+})
+
+const externalApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  message: 'Too many API requests, please slow down and try again.',
+})
+
 const validateNewOrderEmail = [
   check('info.email')
     .isEmail()
@@ -269,7 +281,7 @@ router.post(
   cleanUpHighScores
 )
 
-router.get('/images/:language', searchImages)
+router.get('/images/:language', externalApiLimiter, searchImages)
 
 // Color Accessibility tool (per-user storage)
 router.get('/colors/accessibility', [authenticateUser], getColorAccessibility)
@@ -297,7 +309,7 @@ router.delete(
   deleteColorPaletteByUser
 )
 
-router.get('/quotes/:language/:category', getQuotes)
+router.get('/quotes/:language/:category', externalApiLimiter, getQuotes)
 
 router.get('/todo/:user', [authenticateUser], getTodos)
 router.put('/todo/:user', [authenticateUser], updateAllTodos)
@@ -339,6 +351,7 @@ router.get('/', (_req, res) => {
 
 router.post(
   '/send-email-form',
+  contactFormLimiter,
   [
     body('firstName').trim().escape(),
     body('lastName').trim().escape(),
@@ -367,6 +380,7 @@ router.post(
 
 router.post(
   '/send-email-select',
+  contactFormLimiter,
   [
     body('language')
       .optional({ checkFalsy: true })
