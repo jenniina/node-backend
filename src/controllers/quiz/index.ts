@@ -1,6 +1,6 @@
-import { Response, Request } from "express"
-import { Quiz } from "../../models/quiz"
-import { IQuiz } from "../../types"
+import { Response, Request } from 'express'
+import { Quiz } from '../../models/quiz'
+import { IQuiz } from '../../types'
 
 const getAuthUserId = (req: Request): string | undefined => {
   const authUser = (req as unknown as { user?: { _id?: unknown } }).user
@@ -15,7 +15,7 @@ const ensureSelf = (
 ): boolean => {
   const authUserId = getAuthUserId(req)
   if (!authUserId || authUserId !== String(targetUserId)) {
-    res.status(403).json({ success: false, message: "Forbidden" })
+    res.status(403).json({ success: false, message: 'Forbidden' })
     return false
   }
   return true
@@ -78,12 +78,12 @@ const getUserQuiz = async (req: Request, res: Response): Promise<void> => {
 
 const addQuiz = async (req: Request, res: Response): Promise<void> => {
   try {
-    const body = req.body as Pick<IQuiz, "highscores" | "user">
+    const body = req.body as Pick<IQuiz, 'highscores' | 'user'>
 
     if (!body.user) {
       res
         .status(400)
-        .json({ success: false, message: "user field is required" })
+        .json({ success: false, message: 'user field is required' })
       return
     }
 
@@ -102,28 +102,26 @@ const addQuiz = async (req: Request, res: Response): Promise<void> => {
       const newQuiz: IQuiz = await quiz.save()
       res
         .status(201)
-        .json({ success: true, message: "Quiz added", quiz: newQuiz })
+        .json({ success: true, message: 'Quiz added', quiz: newQuiz })
     } else {
       existingQuiz.highscores = body.highscores
       try {
         const updatedQuiz = (await existingQuiz.save()) as IQuiz
         res
           .status(200)
-          .json({ success: true, message: "Quiz updated", quiz: updatedQuiz })
+          .json({ success: true, message: 'Quiz updated', quiz: updatedQuiz })
       } catch (validationError) {
         console.error(validationError)
-        res
-          .status(400)
-          .json({
-            success: false,
-            message: "Quiz not updated",
-            error: validationError,
-          })
+        res.status(400).json({
+          success: false,
+          message: 'Quiz not updated',
+          error: validationError,
+        })
       }
     }
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: "Internal server error" })
+    res.status(500).json({ success: false, message: 'Internal server error' })
   }
 }
 
@@ -132,12 +130,12 @@ const removeOldestDuplicate = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { user } = req.params as Pick<IQuiz, "user">
+    const { user } = req.params as Pick<IQuiz, 'user'>
 
     if (!user) {
       res
         .status(400)
-        .json({ success: false, message: "user field is required" })
+        .json({ success: false, message: 'user field is required' })
       return
     }
 
@@ -152,13 +150,13 @@ const removeOldestDuplicate = async (
       await Quiz.deleteOne({ _id: oldestQuiz._id })
       res
         .status(200)
-        .json({ success: true, message: "Quiz deleted", quiz: oldestQuiz })
+        .json({ success: true, message: 'Quiz deleted', quiz: oldestQuiz })
     } else {
-      res.status(200).json({ success: true, message: "No duplicate found" })
+      res.status(200).json({ success: true, message: 'No duplicate found' })
     }
   } catch (error) {
     console.error(error)
-    res.status(500).json({ success: false, message: "Internal server error" })
+    res.status(500).json({ success: false, message: 'Internal server error' })
   }
 }
 

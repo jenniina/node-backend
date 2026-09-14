@@ -1,7 +1,9 @@
 node_modules 
 nodemon.json 
 dist
-.env  
+deploy-flat
+scripts
+.env*
 .cache
 .gitattributes  
 *.local

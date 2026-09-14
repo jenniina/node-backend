@@ -1,13 +1,26 @@
 import { Request, Response } from 'express'
 import { request as httpRequest, RequestOptions, Agent } from 'https'
 
-const PIXABAY_API_KEY = process.env.PIXABAY_API_KEY
-
-if (!PIXABAY_API_KEY) {
-  throw new Error('Missing Pixabay API key in environment variables.')
-}
+const getPixabayApiKey = () => process.env.PIXABAY_API_KEY
+const pixabayAgent = new Agent({
+  keepAlive: true,
+  maxSockets: 20,
+  maxFreeSockets: 10,
+  timeout: 15000,
+})
 
 export const searchImages = async (req: Request, res: Response) => {
+  const pixabayApiKey = getPixabayApiKey()
+
+  if (!pixabayApiKey) {
+    return res.status(503).json({
+      success: false,
+      message: 'Pixabay API key is not configured.',
+      totalHits: 0,
+      hits: [],
+    })
+  }
+
   const language = req.params.language || 'en'
   const {
     q,
@@ -50,7 +63,7 @@ export const searchImages = async (req: Request, res: Response) => {
     : 'https://pixabay.com/api/'
 
   const params = new URLSearchParams({
-    key: PIXABAY_API_KEY,
+    key: pixabayApiKey,
     q: q as string,
     image_type: isVideo ? '' : (image_type as string) || 'all',
     video_type: isVideo ? (video_type as string) || 'all' : '',
@@ -84,12 +97,10 @@ export const searchImages = async (req: Request, res: Response) => {
     } - URL: ${url}`
   )
 
-  const agent = new Agent({ keepAlive: true })
-
   const options: RequestOptions = {
     method: 'GET',
     timeout: 10000,
-    agent,
+    agent: pixabayAgent,
   }
 
   const MAX_RETRIES = 3
@@ -108,7 +119,9 @@ export const searchImages = async (req: Request, res: Response) => {
         response.statusCode &&
         (response.statusCode < 200 || response.statusCode >= 300)
       ) {
-        console.error(`Pixabay API responded with status code: ${response.statusCode}`)
+        console.error(
+          `Pixabay API responded with status code: ${response.statusCode}`
+        )
 
         const rateLimitLimit = response.headers['x-ratelimit-limit']
         const rateLimitRemaining = response.headers['x-ratelimit-remaining']

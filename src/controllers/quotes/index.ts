@@ -1,8 +1,14 @@
-import { request as httpRequest, RequestOptions } from 'https'
+import { request as httpRequest, RequestOptions, Agent } from 'https'
 import { Request, Response } from 'express'
 import { ELanguages } from '../../types'
 
 const API_KEY = process.env.RAPIDAPI_API_KEY
+const quotesAgent = new Agent({
+  keepAlive: true,
+  maxSockets: 10,
+  maxFreeSockets: 5,
+  timeout: 15000,
+})
 
 export enum EErrorFetchingQuotes {
   en = 'Error fetching quotes',
@@ -32,6 +38,8 @@ export const getQuotes = async (req: Request, res: Response) => {
     hostname: 'quotes15.p.rapidapi.com',
     port: 443, // HTTPS default port
     path,
+    timeout: 10000,
+    agent: quotesAgent,
     headers: {
       'x-rapidapi-key': API_KEY as string,
       'x-rapidapi-host': 'quotes15.p.rapidapi.com',
@@ -80,6 +88,15 @@ export const getQuotes = async (req: Request, res: Response) => {
       message: `${EErrorFetchingQuotes[language]}: ${error.message}`,
       quote: null,
       error,
+    })
+  })
+
+  request.on('timeout', () => {
+    request.destroy(new Error('Quotes API request timed out'))
+    res.status(504).json({
+      success: false,
+      message: `${EErrorFetchingQuotes[language]}: Request timed out`,
+      quote: null,
     })
   })
 
